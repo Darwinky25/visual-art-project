@@ -1,0 +1,122 @@
+
+> visual-project@0.0.1 build
+> tsc -b && vite build
+
+src/App.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+node_modules/@types/babel__template/index.d.ts(11,28): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/@types/babel__traverse/index.d.ts(63,15): error TS2583: Cannot find name 'WeakMap'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/@types/babel__traverse/index.d.ts(63,31): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/@types/babel__traverse/index.d.ts(64,16): error TS2583: Cannot find name 'WeakMap'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/@types/babel__traverse/index.d.ts(90,13): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/@types/react/index.d.ts(48,7): error TS2304: Cannot find name 'Iterable'.
+node_modules/@types/react/index.d.ts(436,10): error TS2456: Type alias 'ReactNode' circularly references itself.
+node_modules/@types/react/index.d.ts(441,11): error TS2304: Cannot find name 'Iterable'.
+node_modules/@types/webmidi/index.d.ts(28,25): error TS2552: Cannot find name 'ReadonlyMap'. Did you mean 'Readonly'?
+node_modules/@types/webmidi/index.d.ts(34,26): error TS2552: Cannot find name 'ReadonlyMap'. Did you mean 'Readonly'?
+node_modules/postcss/lib/lazy-result.d.ts(52,38): error TS2339: Property 'finally' does not exist on type 'Promise<Result_<RootNode>>'.
+node_modules/postcss/lib/lazy-result.d.ts(142,8): error TS2585: 'Symbol' only refers to a type, but is being used as a value here. Do you need to change your target library? Try changing the 'lib' compiler option to es2015 or later.
+node_modules/postcss/lib/no-work-result.d.ts(26,34): error TS2339: Property 'finally' does not exist on type 'Promise<Result_<Root_>>'.
+node_modules/postcss/lib/no-work-result.d.ts(35,8): error TS2585: 'Symbol' only refers to a type, but is being used as a value here. Do you need to change your target library? Try changing the 'lib' compiler option to es2015 or later.
+node_modules/rollup/dist/rollup.d.ts(252,22): error TS2304: Cannot find name 'IterableIterator'.
+node_modules/rollup/dist/rollup.d.ts(665,22): error TS2304: Cannot find name 'IterableIterator'.
+node_modules/rollup/dist/rollup.d.ts(1014,3): error TS2585: 'Symbol' only refers to a type, but is being used as a value here. Do you need to change your target library? Try changing the 'lib' compiler option to es2015 or later.
+node_modules/vite/dist/node/index.d.ts(1,23): error TS2688: Cannot find type definition file for 'node'.
+node_modules/vite/dist/node/index.d.ts(8,23): error TS2307: Cannot find module 'node:http' or its corresponding type declarations.
+node_modules/vite/dist/node/index.d.ts(9,94): error TS2307: Cannot find module 'node:http' or its corresponding type declarations.
+node_modules/vite/dist/node/index.d.ts(10,35): error TS2307: Cannot find module 'node:http2' or its corresponding type declarations.
+node_modules/vite/dist/node/index.d.ts(11,21): error TS2307: Cannot find module 'node:fs' or its corresponding type declarations.
+node_modules/vite/dist/node/index.d.ts(12,30): error TS2307: Cannot find module 'node:events' or its corresponding type declarations.
+node_modules/vite/dist/node/index.d.ts(13,76): error TS2307: Cannot find module 'node:https' or its corresponding type declarations.
+node_modules/vite/dist/node/index.d.ts(14,22): error TS2307: Cannot find module 'node:net' or its corresponding type declarations.
+node_modules/vite/dist/node/index.d.ts(15,47): error TS2307: Cannot find module 'node:stream' or its corresponding type declarations.
+node_modules/vite/dist/node/index.d.ts(18,38): error TS2307: Cannot find module 'node:tls' or its corresponding type declarations.
+node_modules/vite/dist/node/index.d.ts(19,32): error TS2307: Cannot find module 'node:url' or its corresponding type declarations.
+node_modules/vite/dist/node/index.d.ts(20,29): error TS2307: Cannot find module 'node:zlib' or its corresponding type declarations.
+node_modules/vite/dist/node/index.d.ts(264,35): error TS2503: Cannot find namespace 'NodeJS'.
+node_modules/vite/dist/node/index.d.ts(329,9): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(429,105): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(430,122): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(975,14): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(976,20): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(977,20): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(978,23): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(979,21): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(979,33): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(994,19): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(995,18): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(996,20): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(997,21): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(997,33): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1001,35): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1004,55): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1014,65): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1014,120): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1014,132): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1014,170): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1014,224): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1014,291): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1014,313): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1030,84): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1031,62): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1043,20): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1044,32): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1045,29): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1046,26): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1047,26): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1048,29): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1049,27): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1049,39): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1064,19): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1065,18): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1066,20): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1067,21): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1067,33): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1075,35): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1078,44): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1241,40): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1276,72): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1281,64): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1284,74): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1289,66): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1292,73): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1297,65): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1300,64): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1305,56): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1308,67): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1313,59): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1323,18): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1323,41): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1328,24): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1328,47): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1333,39): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1333,48): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1359,25): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1390,20): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1390,29): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1428,35): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1447,14): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1451,79): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(1520,12): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1890,21): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(1973,61): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/index.d.ts(2261,15): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(2279,12): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(2327,12): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(2975,10): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/index.d.ts(3640,89): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+node_modules/vite/dist/node/module-runner.d.ts(33,27): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/module-runner.d.ts(50,18): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/module-runner.d.ts(51,15): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/module-runner.d.ts(52,13): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/module-runner.d.ts(53,12): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/module-runner.d.ts(55,22): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/module-runner.d.ts(243,14): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/module-runner.d.ts(244,12): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/module-runner.d.ts(254,27): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/module-runner.d.ts(255,30): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/module-runner.d.ts(255,42): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/module-runner.d.ts(256,30): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/dist/node/module-runner.d.ts(271,35): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/types/hot.d.ts(4,4): error TS2585: 'Symbol' only refers to a type, but is being used as a value here. Do you need to change your target library? Try changing the 'lib' compiler option to es2015 or later.
+node_modules/vite/types/metadata.d.ts(2,19): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node_modules/vite/types/metadata.d.ts(3,16): error TS2583: Cannot find name 'Set'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
