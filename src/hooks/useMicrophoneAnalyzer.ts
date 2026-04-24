@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AudioFrame, AudioMetrics } from '../types';
+import { AudioProcessor } from '../audioProcessor';
 
 const createEmptyFrame = (bins = 256): AudioFrame => ({
   level: 0,
@@ -7,28 +8,67 @@ const createEmptyFrame = (bins = 256): AudioFrame => ({
   bass: 0,
   mids: 0,
   highs: 0,
+  treble: 0,
+  energy: 0,
+  bassHit: false,
   pulse: 0,
   bpmHint: 0,
+  beatOnset: 0,
+  beatThreshold: 0,
+  beatIntervalMs: 500,
+  beatConfidence: 0,
+  centroid: 0,
+  texture: 0,
   frequency: new Uint8Array(bins),
   waveform: new Uint8Array(bins),
+  time: 0, // Milliseconds since analyzer started
 });
 
-const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
-
-export function useMicrophoneAnalyzer(smoothingTimeConstant: number = 0.15) {
+export function useMicrophoneAnalyzer(
+  smoothingTimeConstant: number = 0.15,
+  audioProcessorConfig: any = {},
+  metricsUpdateMs: number = 180
+) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationRef = useRef<number | null>(null);
-  const lastTapRef = useRef<number | null>(null);
-  const tapsRef = useRef<number[]>([]);
   const frameRef = useRef<AudioFrame>(createEmptyFrame());
+  const processorRef = useRef<AudioProcessor>(new AudioProcessor());
+  
+  // Re-sync processor reference on config change
+  useEffect(() => {
+    if (processorRef.current) {
+      processorRef.current.setConfig(audioProcessorConfig);
+    }
+  }, [audioProcessorConfig]);
+
+  // Sync analyser DSP settings when config changes
+  useEffect(() => {
+    if (analyserRef.current) {
+      if (audioProcessorConfig?.dspFftSize) {
+        analyserRef.current.fftSize = audioProcessorConfig.dspFftSize;
+      }
+      if (audioProcessorConfig?.dspMinDecibels !== undefined) {
+        analyserRef.current.minDecibels = audioProcessorConfig.dspMinDecibels;
+      }
+      if (audioProcessorConfig?.dspMaxDecibels !== undefined) {
+        analyserRef.current.maxDecibels = audioProcessorConfig.dspMaxDecibels;
+      }
+    }
+  }, [audioProcessorConfig?.dspFftSize, audioProcessorConfig?.dspMinDecibels, audioProcessorConfig?.dspMaxDecibels]);
+  
   const runningRef = useRef(false);
+  const metricsIntervalRef = useRef(metricsUpdateMs);
   const [isRunning, setIsRunning] = useState(false);
   const [status, setStatus] = useState<'idle' | 'starting' | 'ready' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<AudioMetrics>(frameRef.current);
+
+  useEffect(() => {
+    metricsIntervalRef.current = Math.max(60, metricsUpdateMs);
+  }, [metricsUpdateMs]);
 
   const stop = useCallback((resetStatus = true) => {
     runningRef.current = false;
@@ -62,9 +102,11 @@ export function useMicrophoneAnalyzer(smoothingTimeConstant: number = 0.15) {
     }
   }, [smoothingTimeConstant]);
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (forcedDeviceId?: string) => {
     if (runningRef.current) {
-      return;
+      // Allow restarting cleanly if we are forcing a new device while already running
+      if (forcedDeviceId) stop(false);
+      else return;
     }
 
     setError(null);
@@ -77,13 +119,31 @@ export function useMicrophoneAnalyzer(smoothingTimeConstant: number = 0.15) {
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioInputs = devices.filter(d => d.kind === 'audioinput');
+      
+      let targetDeviceId = forcedDeviceId;
+      if (!targetDeviceId) {
+        const nonKinectMic = audioInputs.find(d => !d.label.toLowerCase().includes('kinect') && !d.label.toLowerCase().includes('xbox'));
+        if (nonKinectMic) targetDeviceId = nonKinectMic.deviceId;
+      }
+      
+      const constraints: MediaStreamConstraints = {
         audio: {
           echoCancellation: false,
           noiseSuppression: false,
           autoGainControl: false,
+          ...(targetDeviceId ? { deviceId: { exact: targetDeviceId } } : {})
         },
-      });
+      };
+
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (err) {
+        console.warn("Failed with specific deviceId, falling back to default mic:", err);
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
 
       const AudioContextClass = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioContextClass) {
@@ -96,18 +156,20 @@ export function useMicrophoneAnalyzer(smoothingTimeConstant: number = 0.15) {
       }
 
       const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 512;
-      // Diberi sedikit smoothing (0.15) biar gerakannya gak terlalu "kasar"
-      // tapi latency tetep berasa instan dibanding default (0.8)
-      analyser.smoothingTimeConstant = smoothingTimeConstant;
+      analyser.fftSize = audioProcessorConfig?.dspFftSize ?? 2048; // Default 2048 gives us ~21Hz resolution per bin
+      analyser.minDecibels = audioProcessorConfig?.dspMinDecibels ?? -80; // Limit bottom noise floor to avoid false rhythm
+      analyser.maxDecibels = audioProcessorConfig?.dspMaxDecibels ?? -10;
+
+      analyser.smoothingTimeConstant = Math.max(0, Math.min(0.99, smoothingTimeConstant));
 
       const source = audioContext.createMediaStreamSource(stream);
       source.connect(analyser);
 
-      const frequency = new Uint8Array(analyser.frequencyBinCount);
-      const waveform = new Uint8Array(analyser.frequencyBinCount);
+      let frequency = new Uint8Array(analyser.frequencyBinCount);
+      let waveform = new Uint8Array(analyser.frequencyBinCount);
       const now = performance.now();
       let lastMetricsUpdate = now;
+      const startTime = now; // Track when animation loop started
 
       audioContextRef.current = audioContext;
       analyserRef.current = analyser;
@@ -122,77 +184,26 @@ export function useMicrophoneAnalyzer(smoothingTimeConstant: number = 0.15) {
           return;
         }
 
+        if (frequency.length !== analyserRef.current.frequencyBinCount) {
+          frequency = new Uint8Array(analyserRef.current.frequencyBinCount);
+          waveform = new Uint8Array(analyserRef.current.frequencyBinCount);
+        }
+
         analyserRef.current.getByteFrequencyData(frequency);
         analyserRef.current.getByteTimeDomainData(waveform);
 
-        const bins = frequency.length;
-        const bassEnd = Math.max(8, Math.floor(bins * 0.12));
-        const midsEnd = Math.max(bassEnd + 1, Math.floor(bins * 0.45));
-
-        let sum = 0;
-        let peak = 0;
-        let bassSum = 0;
-        let midsSum = 0;
-        let highsSum = 0;
-        let zeroCrossings = 0;
-        let previousSigned = waveform[0] - 128;
-
-        for (let i = 0; i < bins; i += 1) {
-          const value = frequency[i] / 255;
-          sum += value;
-          peak = Math.max(peak, value);
-
-          if (i < bassEnd) {
-            bassSum += value;
-          } else if (i < midsEnd) {
-            midsSum += value;
-          } else {
-            highsSum += value;
-          }
-
-          const signed = waveform[i] - 128;
-          if ((signed >= 0 && previousSigned < 0) || (signed < 0 && previousSigned >= 0)) {
-            zeroCrossings += 1;
-          }
-          previousSigned = signed;
-        }
-
-        const level = sum / bins;
-        const bass = bassSum / bassEnd;
-        const mids = midsSum / Math.max(1, midsEnd - bassEnd);
-        const highs = highsSum / Math.max(1, bins - midsEnd);
-        const pulse = clamp01(Math.max(bass * 1.2, level * 0.95, peak * 0.75));
-
-        const lastTap = lastTapRef.current;
-        if (pulse > 0.72) {
-          const tapTime = performance.now();
-          if (lastTap !== null && tapTime - lastTap > 250 && tapTime - lastTap < 1100) {
-            tapsRef.current.push(tapTime - lastTap);
-            tapsRef.current = tapsRef.current.slice(-6);
-          }
-          lastTapRef.current = tapTime;
-        }
-
-        const averageTap = tapsRef.current.length
-          ? tapsRef.current.reduce((acc, value) => acc + value, 0) / tapsRef.current.length
-          : 0;
-        const bpmHint = averageTap > 0 ? 60000 / averageTap : Math.min(180, Math.max(60, 80 + bass * 60 + zeroCrossings * 0.08));
+        const metricsObj = processorRef.current.process(frequency, waveform);
 
         frameRef.current = {
-          level,
-          peak,
-          bass,
-          mids,
-          highs,
-          pulse,
-          bpmHint,
+          ...metricsObj,
           frequency,
           waveform,
+          time: performance.now() - startTime, // Milliseconds since loop started
         };
 
-        if (performance.now() - lastMetricsUpdate > 90) {
+        if (performance.now() - lastMetricsUpdate > metricsIntervalRef.current) {
           lastMetricsUpdate = performance.now();
-          setMetrics({ level, peak, bass, mids, highs, pulse, bpmHint });
+          setMetrics(metricsObj);
         }
 
         animationRef.current = requestAnimationFrame(loop);
@@ -205,7 +216,7 @@ export function useMicrophoneAnalyzer(smoothingTimeConstant: number = 0.15) {
       setError(message);
       setStatus('error');
     }
-  }, [stop]);
+  }, [stop, audioProcessorConfig, smoothingTimeConstant]);
 
   const frame = useMemo(() => frameRef, []);
 

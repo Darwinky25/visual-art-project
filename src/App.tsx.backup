@@ -1,0 +1,877 @@
+import { useState, useRef, useEffect, useCallback } from 'react';
+import './styles.css';
+import { useMicrophoneAnalyzer } from './hooks/useMicrophoneAnalyzer';
+import { useSystemAudioAnalyzer } from './hooks/useSystemAudioAnalyzer';
+import { useDjMidi } from './hooks/useDjMidi';
+import { useWebcam } from './hooks/useWebcam';
+import { useKinect } from './hooks/useKinect';
+import { drawVisualizer, VisualSettings } from './visualizer/drawVisualizer';
+import { drawAsciiWebcam } from './visualizer/drawAsciiWebcam';
+import { drawKinect3D } from './visualizer/drawKinect3D';
+
+export type Layer = {
+  id: string;
+  type: 'audio2d' | 'webcamAscii' | 'kinect3d';
+  enabled: boolean;
+  settings: VisualSettings;
+  opacity: number;
+  blendMode: GlobalCompositeOperation;
+};
+
+const defaultSettings: VisualSettings = {
+  visualizationMode: 'audio2d',
+  gridWidthRatio: 1.0,
+  yOffsetRatio: 0.5,
+  dotSizeBase: 6,
+  amplitudeRatio: 0.3,
+  rowSpacingRatio: 0.035,
+  colorMode: 'white',
+  customColor: '#ffffff',
+  backgroundColor: '#000000',
+  movementStyle: 'ripple',
+  bassThreshold: 0.2,
+  midThreshold: 0.4,
+  highThreshold: 0.6,
+  audioSmoothing: 0.15,
+  globalSpeed: 1.5,
+  bassPulseImpact: 0.01,
+  baseBrightness: 0.05,
+  glitchIntensity: 20,
+  rippleDamping: 0.4,
+  rippleSpeed: 7.0,
+  colorWaveDepth: 0.4,
+  breathAmplitude: 0.1,
+  scatterMultiplier: 80,
+  customText: 'ltsdeiw sro le temuggmpndgtble tatodt rroycga hedWidntzed Drveresehe oro trzoeman atspea hntt ms aoe lcoesw fs tcst shr e w tis bhesJul tfo di,s pehayafeotep seotn dngexConditananns giotehesioasowthoawitdcynsmgn a a Cuusco d ot pd t,aTt .sasu .ebeate, i via d t Acr nanscur n how tth ontiediaor or essungattg',
+  asciiResolution: 50,
+  asciiCharSet: 'standard',
+  asciiGlitch: 5,
+  asciiAudioImpact: 0.5,
+  asciiInvert: false,
+  kinectDepthMin: 20,
+  kinectDepthMax: 110,
+  kinectScalePush: 1.5,
+  kinectYPull: 80,
+  kinectFluidSpeed: 0.08,
+  kinectGlow: 0.8,
+  kinectDistortion: 0.1,
+  kinectMirror: true,
+  kinectOffsetX: 0.0,
+  kinectOffsetY: 0.0,
+  kinectZoom: 1.0,
+  kinectCropLeft: 0.0,
+  kinectCropRight: 1.0,
+  kinectCropTop: 0.0,
+  kinectCropBottom: 1.0,
+  kinectSwayAmplitude: 15.0,
+  kinectSwaySpeed: 2.0,
+  kinectLightTrails: true,
+  kinectZAxisColor: true,
+  kinectShockwave: true,
+  kinectWireframe: false,
+  kinectSurveillance: false,
+  kinectSurveillanceColor: '#00ffcc',
+  kinectSurveillanceOpacity: 0.8,
+  kinectSurveillanceSize: 1.2,
+  kinectResolution: 1.0,
+};
+
+export type MidiMapping = {
+  cc: number;
+  channel: number;
+  settingKey: string;
+  min: number;
+  max: number;
+  layerId: string;
+};
+
+export default function App() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const [newMappingKey, setNewMappingKey] = useState('kinectResolution');
+  const [newMappingMin, setNewMappingMin] = useState(0);
+  const [newMappingMax, setNewMappingMax] = useState(1);
+
+  
+  const [layers, setLayers] = useState<Layer[]>(() => {
+    try {
+      const saved = localStorage.getItem('visualizer_layers');
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+    return [
+      {
+        id: 'layer-1',
+        type: 'audio2d',
+        enabled: true,
+        settings: { ...defaultSettings },
+        opacity: 1.0,
+        blendMode: 'source-over'
+      }
+    ];
+  });
+
+  const [activeLayerId, setActiveLayerId] = useState<string>(layers[0]?.id || 'layer-1');
+
+  const activeLayerIndex = layers.findIndex(l => l.id === activeLayerId) !== -1 ? layers.findIndex(l => l.id === activeLayerId) : 0;
+  const activeLayer = layers[activeLayerIndex];
+  
+  const settings = activeLayer ? activeLayer.settings : defaultSettings;
+
+  const setSettings = (newSettings: VisualSettings | ((s: VisualSettings) => VisualSettings)) => {
+    if (!activeLayer) return;
+    setLayers(prev => prev.map(l => {
+      if (l.id === activeLayer.id) {
+        return {
+          ...l,
+          settings: typeof newSettings === 'function' ? newSettings(l.settings) : newSettings
+        };
+      }
+      return l;
+    }));
+  };
+  
+  const { start: startMic, stop: stopMic, frame: micFrame, isRunning: micIsRunning, error: micError } = useMicrophoneAnalyzer(settings.audioSmoothing);
+  const { start: startSystem, stop: stopSystem, frame: systemFrame, isRunning: systemIsRunning } = useSystemAudioAnalyzer(settings.audioSmoothing);
+  const [activeSource, setActiveSource] = useState<'mic' | 'system'>('mic');
+  
+  const { start: startWebcam, stop: stopWebcam, isRunning: webcamIsRunning, videoRef } = useWebcam();
+  const { start: startKinect, stop: stopKinect, isRunning: kinectIsRunning, depthFrameRef, connectionStatus: kinectStatus, setTilt: sendTiltKinect } = useKinect();
+
+  const [kinectTilt, setKinectTilt] = useState(0);
+
+  const { midiStatus, lastMessage, djStateRef } = useDjMidi();
+  
+  const [sensitivity, setSensitivity] = useState(() => {
+    try {
+      const saved = localStorage.getItem('visualizer_sensitivity');
+      if (saved) return parseFloat(saved);
+    } catch { /* ignore */ }
+    return 1;
+  });
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [audioInputDevices, setAudioInputDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedAudioDevice, setSelectedAudioDevice] = useState<string>('');
+
+  useEffect(() => {
+    navigator.mediaDevices?.enumerateDevices().then(devices => {
+      const inputs = devices.filter(d => d.kind === 'audioinput');
+      setAudioInputDevices(inputs);
+    }).catch(() => {});
+  }, []);
+  
+  const [midiMappings, setMidiMappings] = useState<MidiMapping[]>(() => {
+    try {
+      const saved = localStorage.getItem('visualizer_midi');
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+    return [];
+  });
+  const [learningMidi, setLearningMidi] = useState<Partial<MidiMapping> | null>(null);
+
+  useEffect(() => {
+    if (!lastMessage) return;
+
+    if (learningMidi) {
+      if (lastMessage.note > 0) {
+        const newMapping: MidiMapping = {
+          cc: lastMessage.note,
+          channel: lastMessage.channel,
+          settingKey: learningMidi.settingKey!,
+          min: learningMidi.min!,
+          max: learningMidi.max!,
+          layerId: learningMidi.layerId!
+        };
+        
+        setMidiMappings(prev => {
+          const updated = [...prev.filter(p => !(p.cc === newMapping.cc && p.channel === newMapping.channel)), newMapping];
+          localStorage.setItem('visualizer_midi', JSON.stringify(updated));
+          return updated;
+        });
+        setLearningMidi(null);
+      }
+      return;
+    }
+
+    const mapping = midiMappings.find(m => m.cc === lastMessage.note && m.channel === lastMessage.channel);
+    if (mapping) {
+      const ratio = lastMessage.velocity / 127;
+      const val = mapping.min + (ratio * (mapping.max - mapping.min));
+      
+      setLayers(prev => prev.map(l => {
+        if (l.id === mapping.layerId) {
+          if (mapping.settingKey === 'layerOpacity') {
+            return { ...l, opacity: val };
+          }
+          return {
+            ...l,
+            settings: { ...l.settings, [mapping.settingKey]: val }
+          };
+        }
+        return l;
+      }));
+    }
+  }, [lastMessage]); // We intentionally do not use midiMappings in dependencies here, but it works because lastMessage updates on every turn anyway.
+
+  
+  const layersRef = useRef(layers);
+  const sensitivityRef = useRef(sensitivity);
+  
+  useEffect(() => {
+    layersRef.current = layers;
+  }, [layers]);
+
+  useEffect(() => {
+    sensitivityRef.current = sensitivity;
+  }, [sensitivity]);
+
+  useEffect(() => {
+    const usingWebcam = layers.some(l => l.enabled && l.type === 'webcamAscii');
+    if (usingWebcam && !webcamIsRunning) {
+      startWebcam();
+    }
+  }, [layers, webcamIsRunning, startWebcam]);
+
+  // Automatically start Kinect whenever app loads since Audio 2D relies on it
+  useEffect(() => {
+    startKinect();
+  }, [startKinect]);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      containerRef.current?.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  const renderLoop = useCallback(() => {
+    if (canvasRef.current && djStateRef.current) {
+      const parent = canvasRef.current.parentElement;
+      if (parent) {
+        if (canvasRef.current.width !== parent.clientWidth || canvasRef.current.height !== parent.clientHeight) {
+          canvasRef.current.width = parent.clientWidth;
+          canvasRef.current.height = parent.clientHeight;
+        }
+      }
+      
+      const currentData = activeSource === 'mic' && micFrame.current 
+        ? micFrame.current 
+        : systemFrame.current;
+
+      const ctx = canvasRef.current.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+
+        layersRef.current.forEach(layer => {
+          if (!layer.enabled) return;
+          
+          ctx.globalAlpha = layer.opacity;
+          ctx.globalCompositeOperation = layer.blendMode;
+
+          if (layer.type === 'audio2d') {
+            drawVisualizer(ctx, canvasRef.current!, currentData, {
+              sensitivity: sensitivityRef.current,
+              djState: djStateRef.current,
+              settings: layer.settings,
+              kinectDepthFrame: depthFrameRef.current
+            });
+          } else if (layer.type === 'webcamAscii' && videoRef.current && videoRef.current.readyState >= 2) {
+            drawAsciiWebcam(ctx, canvasRef.current!, videoRef.current, currentData, {
+              sensitivity: sensitivityRef.current,
+              settings: layer.settings,
+            });
+          } else if (layer.type === 'kinect3d') {
+            drawKinect3D(ctx, canvasRef.current!, depthFrameRef.current, currentData, {
+              sensitivity: sensitivityRef.current,
+              settings: layer.settings,
+            });
+          }
+        });
+        
+        ctx.globalAlpha = 1.0;
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    }
+    requestAnimationFrame(renderLoop);
+  }, [micFrame, systemFrame, activeSource, djStateRef, videoRef]);
+
+  useEffect(() => {
+    let loopId = requestAnimationFrame(renderLoop);
+    return () => cancelAnimationFrame(loopId);
+  }, [renderLoop]);
+
+  return (
+    <div className="app-shell" ref={containerRef} style={isFullscreen ? { backgroundColor: '#000', display: 'block', padding: 0, cursor: 'none' } : {}}>
+      {!isFullscreen && (
+        <aside className="panel controls glass" style={{ overflowY: 'auto', maxHeight: '100%' }}>
+          <div className="card">
+            <h1>REALTIME DJ VISUALIZER</h1>
+            <p style={{ marginTop: 8 }}>Start mic input, test the response, and shape the visuals for live stage use.</p>
+            <div className="flex gap-2 mt" style={{ marginBottom: 16 }}>
+              <select
+                 value={selectedAudioDevice}
+                 onChange={(e) => setSelectedAudioDevice(e.target.value)}
+                 style={{ padding: '4px', background: '#222', color: '#fff', border: '1px solid #444', borderRadius: '4px', maxWidth: '200px' }}
+              >
+                 <option value="">-- Default Mic --</option>
+                 {audioInputDevices.map(d => (
+                   <option key={d.deviceId} value={d.deviceId}>{d.label || `Mic (${d.deviceId.substring(0, 5)})`}</option>
+                 ))}
+              </select>
+              <button 
+                className="primary" 
+                onClick={async () => {
+                  stopSystem(); 
+                  setActiveSource('mic'); 
+                  // Request generic permission first if labels are hidden
+                  if (audioInputDevices.length > 0 && !audioInputDevices[0].label) {
+                    try { await navigator.mediaDevices.getUserMedia({audio: true}); } catch(e){}
+                    const devs = await navigator.mediaDevices.enumerateDevices();
+                    setAudioInputDevices(devs.filter(d => d.kind === 'audioinput'));
+                  }
+                  startMic(selectedAudioDevice); 
+                }}
+              >Start Input</button>
+              <button className="primary outline" onClick={() => { stopMic(); setActiveSource('system'); startSystem(); }}>Capture System Audio</button>
+              <button onClick={() => { stopMic(); stopSystem(); stopWebcam(); }}>Stop All</button>
+              {micError && <span style={{ color: '#ef4444', padding: '4px 8px', fontSize: '12px' }}>{micError}</span>}
+              
+              <button onClick={() => {
+                localStorage.setItem('visualizer_layers', JSON.stringify(layers));
+                localStorage.setItem('visualizer_sensitivity', sensitivity.toString());
+                alert('Settings saved locally!');
+              }} style={{ background: '#10b981', color: 'white', border: 'none' }}>
+                Save Settings
+              </button>
+              <button onClick={toggleFullscreen} className="outline">Fullscreen</button>
+            </div>
+            {micIsRunning && <span style={{ padding: '4px 8px', background: '#3b82f6', color: '#fff', borderRadius: '4px', fontSize: '12px', marginRight: 4 }}>Mic live</span>}
+            {systemIsRunning && <span style={{ padding: '4px 8px', background: '#10b981', color: '#fff', borderRadius: '4px', fontSize: '12px', marginRight: 4 }}>System audio live</span>}
+              {webcamIsRunning && <span style={{ padding: '4px 8px', background: '#eab308', color: '#fff', borderRadius: '4px', fontSize: '12px', marginRight: 4 }}>Webcam active</span>}
+              {kinectIsRunning && <span style={{ padding: '4px 8px', background: '#8b5cf6', color: '#fff', borderRadius: '4px', fontSize: '12px' }}>{kinectStatus}</span>}
+          <div className="card">
+             <div className="flex space-between">
+              <span style={{ fontSize: '0.8rem', opacity: 0.8, fontWeight: 600 }}>Layers Setup</span>
+             </div>
+             
+             {layers.map(layer => (
+               <div key={layer.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', padding: '8px', background: layer.id === activeLayer?.id ? '#333' : 'transparent', borderRadius: '4px', border: '1px solid #444' }}>
+                 <input type="checkbox" checked={layer.enabled} onChange={(e) => {
+                   setLayers(prev => prev.map(l => l.id === layer.id ? { ...l, enabled: e.target.checked } : l));
+                 }} />
+                 <span style={{ flex: 1, cursor: 'pointer' }} onClick={() => setActiveLayerId(layer.id)}>
+                   {layer.type === 'audio2d' ? 'Audio 2D' : 'Webcam ASCII'} ({layer.id})
+                 </span>
+                 <button className="outline" style={{ padding: '2px 6px', fontSize: '10px' }} onClick={() => {
+                   setLayers(prev => prev.filter(l => l.id !== layer.id));
+                   if (activeLayerId === layer.id) setActiveLayerId(layers[0]?.id || '');
+                 }}>X</button>
+               </div>
+             ))}
+
+             <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
+                <button className="outline" onClick={() => {
+                  const newId = `layer-${Date.now()}`;
+                  setLayers(prev => [...prev, { id: newId, type: 'audio2d', enabled: true, settings: { ...defaultSettings, visualizationMode: 'audio2d' }, opacity: 1.0, blendMode: 'screen' }]);
+                  setActiveLayerId(newId);
+                }}>+ Audio Layer</button>
+                <button className="outline" onClick={() => {
+                  const newId = `layer-${Date.now()}`;
+                  setLayers(prev => [...prev, { id: newId, type: 'webcamAscii', enabled: true, settings: { ...defaultSettings, visualizationMode: 'webcamAscii' }, opacity: 1.0, blendMode: 'screen' }]);
+                  setActiveLayerId(newId);
+                }}>+ Webcam Layer</button>
+                  <button className="outline" onClick={() => {
+                    const newId = `layer-${Date.now()}`;
+                    setLayers(prev => [...prev, { id: newId, type: 'kinect3d', enabled: true, settings: { ...defaultSettings, visualizationMode: 'kinect3d' }, opacity: 1.0, blendMode: 'screen' }]);
+                    setActiveLayerId(newId);
+                    startKinect();
+                  }}>+ Kinect 3D</button>
+             </div>
+          </div>
+             <p style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>{midiStatus}</p>
+             {lastMessage && (
+               <p style={{ marginTop: '0.2rem', fontSize: '0.75rem', color: '#ffcc00' }}>
+                 MIDI Debug - Ch: {lastMessage.channel} | Cmd: {lastMessage.command} | Note/CC: {lastMessage.note} | Value: {lastMessage.velocity}
+               </p>
+             )}
+          </div>
+
+          {activeLayer && (
+            <div className="card">
+              <h3 style={{ fontSize: '0.9rem', marginBottom: '0.8rem' }}>Settings for Active Layer: {activeLayer.type}</h3>
+              
+              <div style={{ borderBottom: '1px solid #333', paddingBottom: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '0.8rem' }}>
+                <strong style={{ opacity: 0.5, textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.65rem' }}>Layer Overrides</strong>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', background: '#222', padding: '6px', borderRadius: '4px', border: '1px solid #444' }}>
+                   <label style={{ margin: 0, color: '#fff', fontSize: '0.8rem', fontWeight: 600 }}>Teks / Huruf Warna Utama</label>
+                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                     <input 
+                       type="color" 
+                       value={settings.colorMode === 'custom' ? settings.customColor : '#ffffff'} 
+                       onChange={(e) => setSettings({...settings, customColor: e.target.value, colorMode: 'custom', kinectZAxisColor: false})} 
+                       style={{ width: '40px', height: '24px', border: 'none', padding: 0, cursor: 'pointer', background: 'transparent' }}
+                     />
+                     <button className="outline" style={{ fontSize: '10px', padding: '2px 6px' }} onClick={() => setSettings({...settings, colorMode: 'rainbow'})}>Reset Ke RGB</button>
+                   </div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Opacity: {(activeLayer.opacity * 100).toFixed(0)}%</label>
+                  <input type="range" min="0" max="1" step="0.05" value={activeLayer.opacity} onChange={(e) => {
+                    setLayers(prev => prev.map(l => l.id === activeLayer.id ? { ...l, opacity: parseFloat(e.target.value) } : l));
+                  }} style={{ width: '100%' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Blend Mode:</label>
+                  <select 
+                    style={{ width: '100%', padding: '4px', background: '#333', color: 'white', border: 'none', borderRadius: '4px' }}
+                    value={activeLayer.blendMode} 
+                    onChange={(e) => {
+                      setLayers(prev => prev.map(l => l.id === activeLayer.id ? { ...l, blendMode: e.target.value as GlobalCompositeOperation } : l));
+                    }}
+                  >
+                     <option value="source-over">Normal</option>
+                     <option value="screen">Screen (Add)</option>
+                     <option value="multiply">Multiply</option>
+                     <option value="overlay">Overlay</option>
+                     <option value="lighter">Lighter</option>
+                     <option value="difference">Difference</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', fontSize: '0.75rem' }}>
+                
+                {/* SETTING KHUSUS KINECT MUNCUL BILA AUDIO 2D DIPADUKAN DENGAN KINECT ATAU SEDANG LAYER KINECT */}
+                {kinectIsRunning && (
+                  <div style={{ padding: '0.8rem', background: '#1a0a2a', borderRadius: '4px', border: '1px solid #4a2a6a', marginBottom: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                    <strong style={{ color: '#d48bff', display: 'block', textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.65rem' }}>🤖 KINECT 3D CALIBRATION</strong>
+                    <div>
+                      <label style={{ display: 'flex', justifyContent: 'space-between', color: '#ffb3ff', marginBottom: '0.2rem' }}>Mesh Render Resolution: <span>{settings.kinectResolution !== undefined ? settings.kinectResolution.toFixed(1) : 1.0}x</span></label>
+                      <input type="range" min="0.5" max="3.0" step="0.1" value={settings.kinectResolution !== undefined ? settings.kinectResolution : 1.0} onChange={(e) => setSettings({ ...settings, kinectResolution: parseFloat(e.target.value) })} style={{ width: '100%', accentColor: '#ffb3ff' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'flex', justifyContent: 'space-between', color: '#ffb3ff', marginBottom: '0.2rem' }}>Near Sensor Distance (Min): <span>{settings.kinectDepthMin}</span></label>
+                      <input type="range" min="5" max="100" value={settings.kinectDepthMin} onChange={(e) => setSettings({ ...settings, kinectDepthMin: parseInt(e.target.value) })} style={{ width: '100%', accentColor: '#ffb3ff' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'flex', justifyContent: 'space-between', color: '#ffb3ff', marginBottom: '0.2rem' }}>Far Sensor/Wall Distance (Max): <span>{settings.kinectDepthMax}</span></label>
+                      <input type="range" min="50" max="250" value={settings.kinectDepthMax} onChange={(e) => setSettings({ ...settings, kinectDepthMax: parseInt(e.target.value) })} style={{ width: '100%', accentColor: '#ffb3ff' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'flex', justifyContent: 'space-between', color: '#ffb3ff', marginBottom: '0.2rem' }}>Center Mesh Protrusion (Y-Pull): <span>{settings.kinectYPull}px</span></label>
+                      <input type="range" min="0" max="300" value={settings.kinectYPull} onChange={(e) => setSettings({ ...settings, kinectYPull: parseInt(e.target.value) })} style={{ width: '100%', accentColor: '#ffb3ff' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'flex', justifyContent: 'space-between', color: '#ffb3ff', marginBottom: '0.2rem' }}>Particle Deformation Force (Text Scale): <span>{settings.kinectScalePush}x</span></label>
+                      <input type="range" min="0.0" max="5.0" step="0.1" value={settings.kinectScalePush} onChange={(e) => setSettings({ ...settings, kinectScalePush: parseFloat(e.target.value) })} style={{ width: '100%', accentColor: '#ffb3ff' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'flex', justifyContent: 'space-between', color: '#aaffff', marginBottom: '0.2rem' }}>Motor Tilt Position (Up / Down): <span>{kinectTilt}°</span></label>
+                      <input type="range" min="-30" max="30" step="1" value={kinectTilt} 
+                           onChange={(e) => setKinectTilt(parseInt(e.target.value))} 
+                           onMouseUp={(e) => sendTiltKinect(kinectTilt)}
+                           onTouchEnd={(e) => sendTiltKinect(kinectTilt)}
+                           style={{ width: '100%', accentColor: '#aaffff' }} />
+                    </div>
+                    <hr style={{ borderColor: '#4a2a6a', margin: '0.5rem 0' }} />
+                    <div>
+                      <label style={{ display: 'flex', justifyContent: 'space-between', color: '#ffb3ff', marginBottom: '0.2rem' }}>Fluid Memory Delay Speed: <span>{(settings.kinectFluidSpeed).toFixed(2)}x</span></label>
+                      <input type="range" min="0.01" max="0.5" step="0.01" value={settings.kinectFluidSpeed} onChange={(e) => setSettings({ ...settings, kinectFluidSpeed: parseFloat(e.target.value) })} style={{ width: '100%', accentColor: '#ffb3ff' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'flex', justifyContent: 'space-between', color: '#ffb3ff', marginBottom: '0.2rem' }}>Body Emission Glow: <span>{(settings.kinectGlow * 100).toFixed(0)}%</span></label>
+                      <input type="range" min="0.0" max="2.0" step="0.1" value={settings.kinectGlow} onChange={(e) => setSettings({ ...settings, kinectGlow: parseFloat(e.target.value) })} style={{ width: '100%', accentColor: '#ffb3ff' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'flex', justifyContent: 'space-between', color: '#ffb3ff', marginBottom: '0.2rem' }}>Radial Edge Distortion: <span>{settings.kinectDistortion}x</span></label>
+                      <input type="range" min="0.0" max="1.5" step="0.05" value={settings.kinectDistortion} onChange={(e) => setSettings({ ...settings, kinectDistortion: parseFloat(e.target.value) })} style={{ width: '100%', accentColor: '#ffb3ff' }} />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.2rem', color: '#ffb3ff' }}>
+                      <input type="checkbox" checked={settings.kinectMirror} onChange={(e) => setSettings({ ...settings, kinectMirror: e.target.checked })} style={{ accentColor: '#ffb3ff' }}/>
+                      <label>Mirror Camera (Horizontal Flip)</label>
+                    </div>
+
+                    <hr style={{ borderColor: '#4a2a6a', margin: '0.5rem 0' }} />
+                    <strong style={{ opacity: 0.8, color: '#ffb3ff', fontSize: '0.75rem' }}>3D PARALLAX / SWAY</strong>
+                    
+                    <div>
+                      <label style={{ display: 'flex', justifyContent: 'space-between', color: '#ffb3ff', marginBottom: '0.2rem' }}>3D Parallax Sway Amplitude: <span>{settings.kinectSwayAmplitude !== undefined ? settings.kinectSwayAmplitude.toFixed(1) : 15.0}</span></label>
+                      <input type="range" min="0" max="60" step="1" value={settings.kinectSwayAmplitude !== undefined ? settings.kinectSwayAmplitude : 15.0} onChange={(e) => setSettings({ ...settings, kinectSwayAmplitude: parseFloat(e.target.value) })} style={{ width: '100%', accentColor: '#aaffff' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'flex', justifyContent: 'space-between', color: '#ffb3ff', marginBottom: '0.2rem' }}>Parallax Sway Speed: <span>{settings.kinectSwaySpeed !== undefined ? settings.kinectSwaySpeed.toFixed(1) : 1.0}x</span></label>
+                      <input type="range" min="0.1" max="5.0" step="0.1" value={settings.kinectSwaySpeed !== undefined ? settings.kinectSwaySpeed : 1.0} onChange={(e) => setSettings({ ...settings, kinectSwaySpeed: parseFloat(e.target.value) })} style={{ width: '100%', accentColor: '#aaffff' }} />
+                    </div>
+
+                    <hr style={{ borderColor: '#4a2a6a', margin: '0.5rem 0' }} />
+                    <strong style={{ opacity: 0.8, color: '#ff00ff', fontSize: '0.75rem' }}>⚡ CYBERPUNK EFFECTS (EXPERIMENTAL) ⚡</strong>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.3rem' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#fff', fontSize: '0.7rem' }}>
+                          <input type="checkbox" checked={settings.kinectLightTrails} onChange={(e) => setSettings({ ...settings, kinectLightTrails: e.target.checked })} style={{ accentColor: '#ff00ff' }}/>
+                          Motion Blur / Trails
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#fff', fontSize: '0.7rem' }}>
+                          <input type="checkbox" checked={settings.kinectZAxisColor} onChange={(e) => setSettings({ ...settings, kinectZAxisColor: e.target.checked })} style={{ accentColor: '#ff00ff' }}/>
+                          Holographic Z-Color
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#fff', fontSize: '0.7rem' }}>
+                          <input type="checkbox" checked={settings.kinectShockwave} onChange={(e) => setSettings({ ...settings, kinectShockwave: e.target.checked })} style={{ accentColor: '#ff00ff' }}/>
+                          Bass Explosions
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#fff', fontSize: '0.7rem' }}>
+                          <input type="checkbox" checked={settings.kinectWireframe} onChange={(e) => setSettings({ ...settings, kinectWireframe: e.target.checked })} style={{ accentColor: '#ff00ff' }}/>
+                          Matrix Wireframe
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#00ffcc', fontSize: '0.7rem' }}>
+                          <input type="checkbox" checked={settings.kinectSurveillance} onChange={(e) => setSettings({ ...settings, kinectSurveillance: e.target.checked })} style={{ accentColor: '#00ffcc' }}/>
+                          [CCTV] Tracker
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#fff', fontSize: '0.7rem' }}>
+                          <input type="color" value={settings.kinectSurveillanceColor || '#00ffcc'} onChange={(e) => setSettings({ ...settings, kinectSurveillanceColor: e.target.value })} style={{ width: '20px', height: '20px', padding: 0, border: 'none', background: 'none' }}/>
+                          CCTV Color
+                        </label>
+                    </div>
+                    {settings.kinectSurveillance && (
+                      <div style={{ marginTop: '0.3rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(0, 255, 204, 0.1)', padding: '0.5rem', borderRadius: '4px' }}>
+                        <div>
+                          <label style={{ display: 'flex', justifyContent: 'space-between', color: settings.kinectSurveillanceColor || '#00ffcc', marginBottom: '0.2rem', fontSize: '0.7rem' }}>Tracking UI Opacity: <span>{(settings.kinectSurveillanceOpacity ?? 0.8).toFixed(2)}</span></label>
+                          <input type="range" min="0.0" max="1.0" step="0.05" value={settings.kinectSurveillanceOpacity ?? 0.8} onChange={(e) => setSettings({ ...settings, kinectSurveillanceOpacity: parseFloat(e.target.value) })} style={{ width: '100%', accentColor: settings.kinectSurveillanceColor || '#00ffcc' }} />
+                        </div>
+                        <div>
+                          <label style={{ display: 'flex', justifyContent: 'space-between', color: settings.kinectSurveillanceColor || '#00ffcc', marginBottom: '0.2rem', fontSize: '0.7rem' }}>Tracking UI Size: <span>{(settings.kinectSurveillanceSize ?? 1.2).toFixed(2)}x</span></label>
+                          <input type="range" min="0.5" max="3.0" step="0.1" value={settings.kinectSurveillanceSize ?? 1.2} onChange={(e) => setSettings({ ...settings, kinectSurveillanceSize: parseFloat(e.target.value) })} style={{ width: '100%', accentColor: settings.kinectSurveillanceColor || '#00ffcc' }} />
+                        </div>
+                      </div>
+                    )}
+
+                    <hr style={{ borderColor: '#444', margin: '0.5rem 0' }} />
+                    <strong style={{ opacity: 0.8, color: '#fff', fontSize: '0.75rem' }}>POSITION & CROP</strong>
+                    
+                    <div>
+                      <label style={{ display: 'flex', justifyContent: 'space-between', color: '#ccc', marginBottom: '0.2rem' }}>Camera Zoom Scale: <span>{settings.kinectZoom?.toFixed(2)}x</span></label>
+                      <input type="range" min="0.5" max="3.0" step="0.05" value={settings.kinectZoom || 1.0} onChange={(e) => setSettings({ ...settings, kinectZoom: parseFloat(e.target.value) })} style={{ width: '100%', accentColor: '#fff' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'flex', justifyContent: 'space-between', color: '#ccc', marginBottom: '0.2rem' }}>Horizontal Offset (X): <span>{settings.kinectOffsetX?.toFixed(2)}</span></label>
+                      <input type="range" min="-1.0" max="1.0" step="0.05" value={settings.kinectOffsetX || 0.0} onChange={(e) => setSettings({ ...settings, kinectOffsetX: parseFloat(e.target.value) })} style={{ width: '100%', accentColor: '#fff' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'flex', justifyContent: 'space-between', color: '#ccc', marginBottom: '0.2rem' }}>Vertical Offset (Y): <span>{settings.kinectOffsetY?.toFixed(2)}</span></label>
+                      <input type="range" min="-1.0" max="1.0" step="0.05" value={settings.kinectOffsetY || 0.0} onChange={(e) => setSettings({ ...settings, kinectOffsetY: parseFloat(e.target.value) })} style={{ width: '100%', accentColor: '#fff' }} />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.3rem' }}>
+                        <div>
+                          <label style={{ display: 'block', color: '#ccc', fontSize: '0.7rem' }}>Crop Left: {(settings.kinectCropLeft ?? 0).toFixed(2)}</label>
+                          <input type="range" min="0.0" max="0.5" step="0.01" value={settings.kinectCropLeft || 0.0} onChange={(e) => setSettings({ ...settings, kinectCropLeft: parseFloat(e.target.value) })} style={{ width: '100%' }} />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', color: '#ccc', fontSize: '0.7rem', textAlign: 'right' }}>Crop Right: {(settings.kinectCropRight ?? 1).toFixed(2)}</label>
+                          <input type="range" min="0.5" max="1.0" step="0.01" value={settings.kinectCropRight || 1.0} onChange={(e) => setSettings({ ...settings, kinectCropRight: parseFloat(e.target.value) })} style={{ width: '100%' }} />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', color: '#ccc', fontSize: '0.7rem' }}>Crop Top: {(settings.kinectCropTop ?? 0).toFixed(2)}</label>
+                          <input type="range" min="0.0" max="0.5" step="0.01" value={settings.kinectCropTop || 0.0} onChange={(e) => setSettings({ ...settings, kinectCropTop: parseFloat(e.target.value) })} style={{ width: '100%' }} />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', color: '#ccc', fontSize: '0.7rem', textAlign: 'right' }}>Crop Bottom: {(settings.kinectCropBottom ?? 1).toFixed(2)}</label>
+                          <input type="range" min="0.5" max="1.0" step="0.01" value={settings.kinectCropBottom || 1.0} onChange={(e) => setSettings({ ...settings, kinectCropBottom: parseFloat(e.target.value) })} style={{ width: '100%' }} />
+                        </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* GROUP 1: BASE VISUALS */}
+                <div style={{ borderBottom: '1px solid #333', paddingBottom: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                  <strong style={{ opacity: 0.5, textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.65rem' }}>Shape & Size</strong>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Sensitivity: {sensitivity.toFixed(1)}x</label>
+                    <input type="range" min="0.1" max="5" step="0.1" value={sensitivity} onChange={(e) => setSensitivity(parseFloat(e.target.value))} style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Grid Width: {(settings.gridWidthRatio * 100).toFixed(0)}%</label>
+                    <input type="range" min="0.1" max="1" step="0.05" value={settings.gridWidthRatio} onChange={(e) => setSettings({...settings, gridWidthRatio: parseFloat(e.target.value)})} style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Vertical Position: {(settings.yOffsetRatio * 100).toFixed(0)}%</label>
+                    <input type="range" min="0.1" max="1" step="0.05" value={settings.yOffsetRatio} onChange={(e) => setSettings({...settings, yOffsetRatio: parseFloat(e.target.value)})} style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Dot Size: {settings.dotSizeBase.toFixed(1)}</label>
+                    <input type="range" min="1" max="10" step="0.5" value={settings.dotSizeBase} onChange={(e) => setSettings({...settings, dotSizeBase: parseFloat(e.target.value)})} style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Perspective Spacing: {settings.rowSpacingRatio.toFixed(3)}</label>
+                    <input type="range" min="0.005" max="0.05" step="0.001" value={settings.rowSpacingRatio} onChange={(e) => setSettings({...settings, rowSpacingRatio: parseFloat(e.target.value)})} style={{ width: '100%' }} />
+                  </div>
+                </div>
+
+                {/* GROUP 2: AUDIO THRESHOLD */}
+                <div style={{ borderBottom: '1px solid #333', paddingBottom: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                   <strong style={{ opacity: 0.5, textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.65rem' }}>Audio Analysis</strong>
+                   <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Audio Smoothing (Latency/Jitter): {settings.audioSmoothing.toFixed(2)}</label>
+                    <input type="range" min="0.01" max="0.95" step="0.01" value={settings.audioSmoothing} onChange={(e) => setSettings({...settings, audioSmoothing: parseFloat(e.target.value)})} style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Bass Movement Threshold: {(settings.bassThreshold * 100).toFixed(0)}%</label>
+                    <input type="range" min="0" max="0.8" step="0.05" value={settings.bassThreshold} onChange={(e) => setSettings({...settings, bassThreshold: parseFloat(e.target.value)})} style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Mid Movement Threshold: {(settings.midThreshold * 100).toFixed(0)}%</label>
+                    <input type="range" min="0" max="0.8" step="0.05" value={settings.midThreshold} onChange={(e) => setSettings({...settings, midThreshold: parseFloat(e.target.value)})} style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>High/Treble Movement Threshold: {(settings.highThreshold * 100).toFixed(0)}%</label>
+                    <input type="range" min="0" max="0.8" step="0.05" value={settings.highThreshold} onChange={(e) => setSettings({...settings, highThreshold: parseFloat(e.target.value)})} style={{ width: '100%' }} />
+                  </div>
+                </div>
+
+                {/* GROUP 3: WAVE & MOVEMENT */}
+                <div style={{ borderBottom: '1px solid #333', paddingBottom: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                  <strong style={{ opacity: 0.5, textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.65rem' }}>Wave Geometry</strong>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Movement Style:</label>
+                    <select 
+                      style={{ width: '100%', padding: '4px', background: '#333', color: 'white', border: 'none', borderRadius: '4px' }}
+                      value={settings.movementStyle} 
+                      onChange={(e) => setSettings({...settings, movementStyle: e.target.value as any})}
+                    >
+                       <option value="ripple">Radial Ripple (Default)</option>
+                       <option value="wave">Vertical Wave</option>
+                       <option value="matrix">Matrix Rain</option>
+                       <option value="glitch">Random Glitch</option>
+                       <option value="static">Static Equalizer</option>
+                       <option value="orbit">Orbiting Spiral</option>
+                       <option value="tunnel">Hyperspace Tunnel</option>
+                       <option value="pulse">Heartbeat Pulse</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Wave/Ripple Density: {settings.rippleDamping.toFixed(2)}</label>
+                    <input type="range" min="0.05" max="2.0" step="0.05" value={settings.rippleDamping} onChange={(e) => setSettings({...settings, rippleDamping: parseFloat(e.target.value)})} style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Wave/Ripple Speed: {settings.rippleSpeed.toFixed(1)}</label>
+                    <input type="range" min="0" max="20" step="0.5" value={settings.rippleSpeed} onChange={(e) => setSettings({...settings, rippleSpeed: parseFloat(e.target.value)})} style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Color Wave Depth: {settings.colorWaveDepth.toFixed(2)}</label>
+                    <input type="range" min="0" max="1" step="0.05" value={settings.colorWaveDepth} onChange={(e) => setSettings({...settings, colorWaveDepth: parseFloat(e.target.value)})} style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Animation Base Speed: {settings.globalSpeed.toFixed(1)}x</label>
+                    <input type="range" min="0" max="5" step="0.1" value={settings.globalSpeed} onChange={(e) => setSettings({...settings, globalSpeed: parseFloat(e.target.value)})} style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Breathing Amplitude: {settings.breathAmplitude.toFixed(2)}</label>
+                    <input type="range" min="0" max="0.5" step="0.01" value={settings.breathAmplitude} onChange={(e) => setSettings({...settings, breathAmplitude: parseFloat(e.target.value)})} style={{ width: '100%' }} />
+                  </div>
+                </div>
+
+                {/* GROUP 4: IMPACT & GLITCH */}
+                <div style={{ borderBottom: '1px solid #333', paddingBottom: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                  <strong style={{ opacity: 0.5, textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.65rem' }}>Impact & Reaction</strong>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Amplitude Base (Height): {settings.amplitudeRatio.toFixed(2)}</label>
+                    <input type="range" min="0.1" max="2" step="0.05" value={settings.amplitudeRatio} onChange={(e) => setSettings({...settings, amplitudeRatio: parseFloat(e.target.value)})} style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Bass Pulse Impact (Zoom Grid): {settings.bassPulseImpact.toFixed(3)}</label>
+                    <input type="range" min="0" max="0.1" step="0.005" value={settings.bassPulseImpact} onChange={(e) => setSettings({...settings, bassPulseImpact: parseFloat(e.target.value)})} style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Glitch Text Intensity: {settings.glitchIntensity}</label>
+                    <input type="range" min="0" max="100" step="1" value={settings.glitchIntensity} onChange={(e) => setSettings({...settings, glitchIntensity: parseInt(e.target.value)})} style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Scatter / Jump Multiplier: {settings.scatterMultiplier}</label>
+                    <input type="range" min="0" max="200" step="1" value={settings.scatterMultiplier} onChange={(e) => setSettings({...settings, scatterMultiplier: parseInt(e.target.value)})} style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Base Bass Brightness: {settings.baseBrightness.toFixed(2)}</label>
+                    <input type="range" min="0" max="0.5" step="0.01" value={settings.baseBrightness} onChange={(e) => setSettings({...settings, baseBrightness: parseFloat(e.target.value)})} style={{ width: '100%' }} />
+                  </div>
+                </div>
+
+                {/* GROUP 5: THEME */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', borderBottom: '1px solid #333', paddingBottom: '0.6rem' }}>
+                  <strong style={{ opacity: 0.5, textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.65rem' }}>Theme & Content</strong>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Color Mode:</label>
+                    <select 
+                      style={{ width: '100%', padding: '4px', background: '#333', color: 'white', border: 'none', borderRadius: '4px' }}
+                      value={settings.colorMode} 
+                      onChange={(e) => setSettings({...settings, colorMode: e.target.value as any})}
+                    >
+                       <option value="white">Minimal White</option>
+                       <option value="neon">Neon Override</option>
+                       <option value="rainbow">Rainbow Spectrogram</option>
+                       <option value="thermal">Thermal Vision</option>
+                       <option value="custom">Custom Color (100% Control)</option>
+                    </select>
+                  </div>
+                  
+                  {settings.colorMode === 'custom' && (
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Primary Text Color:</label>
+                      <input 
+                        type="color" 
+                        value={settings.customColor} 
+                        onChange={(e) => setSettings({...settings, customColor: e.target.value})} 
+                        style={{ width: '100%', height: '30px', border: 'none', padding: 0, background: 'none' }}
+                      />
+                    </div>
+                  )}
+                  
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Background Color:</label>
+                    <input 
+                      type="color" 
+                      value={settings.backgroundColor} 
+                      onChange={(e) => setSettings({...settings, backgroundColor: e.target.value})} 
+                      style={{ width: '100%', height: '30px', border: 'none', padding: 0, background: 'none' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Custom Text / Characters:</label>
+                    <textarea 
+                      style={{ width: '100%', height: '80px', padding: '4px', background: '#333', color: 'white', border: 'none', borderRadius: '4px' }}
+                      value={settings.customText}
+                      onChange={(e) => setSettings({...settings, customText: e.target.value})}
+                    />
+                  </div>                
+                </div>
+                
+                {activeLayer.type === 'webcamAscii' && (
+                  <>
+                    {/* GROUP 6: ASCII SETTINGS */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                      <strong style={{ opacity: 0.5, textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.65rem' }}>ASCII & Webcam</strong>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>ASCII Resolution: {settings.asciiResolution}</label>
+                        <input type="range" min="10" max="150" step="5" value={settings.asciiResolution} onChange={(e) => setSettings({...settings, asciiResolution: parseInt(e.target.value)})} style={{ width: '100%' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Character Set:</label>
+                        <select 
+                          style={{ width: '100%', padding: '4px', background: '#333', color: 'white', border: 'none', borderRadius: '4px' }}
+                          value={settings.asciiCharSet} 
+                          onChange={(e) => setSettings({...settings, asciiCharSet: e.target.value as any})}
+                        >
+                           <option value="standard">Standard (@%#*+=-:. )</option>
+                           <option value="dense">Dense</option>
+                           <option value="binary">Binary (10)</option>
+                           <option value="matrix">Matrix</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>ASCII Glitch Intensity: {settings.asciiGlitch}</label>
+                        <input type="range" min="0" max="100" step="1" value={settings.asciiGlitch} onChange={(e) => setSettings({...settings, asciiGlitch: parseInt(e.target.value)})} style={{ width: '100%' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '0.2rem', color: '#fff' }}>Audio Size Impact: {settings.asciiAudioImpact.toFixed(2)}</label>
+                        <input type="range" min="0" max="2" step="0.1" value={settings.asciiAudioImpact} onChange={(e) => setSettings({...settings, asciiAudioImpact: parseFloat(e.target.value)})} style={{ width: '100%' }} />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input type="checkbox" id="asciiInvert" checked={settings.asciiInvert} onChange={(e) => setSettings({...settings, asciiInvert: e.target.checked})} />
+                        <label htmlFor="asciiInvert" style={{ color: '#fff' }}>Invert Brightness</label>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+              </div>
+
+              {/* MIDI ASSIGNMENT UI */}
+              <div style={{ marginTop: '1.5rem', padding: '0.8rem', background: '#222', borderRadius: '4px', border: '1px solid #444' }}>
+                <h4 style={{ margin: '0 0 0.8rem 0', color: '#ffcc00', fontSize: '0.85rem' }}>MIDI Config & Assigner</h4>
+                
+                {midiMappings.filter(m => m.layerId === activeLayer.id).map(m => (
+                  <div key={`${m.cc}-${m.channel}-${m.settingKey}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem', marginBottom: '0.4rem', fontSize: '0.75rem', background: '#111', padding: '0.4rem', borderRadius: '4px' }}>
+                    <span style={{ color: '#22c55e', fontWeight: 'bold' }}>CC {m.cc}</span>
+                    <span style={{flex: 1, textOverflow: 'ellipsis', overflow: 'hidden'}}>{m.settingKey} ({m.min}..{m.max})</span>
+                    <button 
+                      style={{ padding: '2px 6px', fontSize: '0.65rem' }}
+                      className="outline"
+                      onClick={() => {
+                        setMidiMappings(prev => {
+                          const updated = prev.filter(p => !(p.cc === m.cc && p.channel === m.channel));
+                          localStorage.setItem('visualizer_midi', JSON.stringify(updated));
+                          return updated;
+                        });
+                      }}>DEL</button>
+                  </div>
+                ))}
+                
+                <div style={{ display: 'flex', gap: '0.4rem', flexDirection: 'column', marginTop: '1rem', borderTop: '1px dashed #444', paddingTop: '1rem' }}>
+                  <select 
+                    value={newMappingKey} 
+                    onChange={e => setNewMappingKey(e.target.value)}
+                    style={{ width: '100%', padding: '6px', background: '#111', color: 'white', border: '1px solid #333', borderRadius: '4px' }}
+                  >
+                    <option value="layerOpacity">Layer Opacity (Global)</option>
+                    {Object.keys(defaultSettings).map(k => (
+                      <option key={k} value={k}>{k}</option>
+                    ))}
+                  </select>
+                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                    <span style={{fontSize: '10px', opacity: 0.6}}>Min:</span>
+                    <input type="number" step="0.01" placeholder="Min" value={newMappingMin} onChange={e => setNewMappingMin(parseFloat(e.target.value))} style={{ width: '40%', padding: '4px', background: '#111', color: 'white', border: '1px solid #333', borderRadius: '4px' }} />
+                    <span style={{fontSize: '10px', opacity: 0.6}}>Max:</span>
+                    <input type="number" step="0.01" placeholder="Max" value={newMappingMax} onChange={e => setNewMappingMax(parseFloat(e.target.value))} style={{ width: '40%', padding: '4px', background: '#111', color: 'white', border: '1px solid #333', borderRadius: '4px' }} />
+                  </div>
+                  <button 
+                    onClick={() => {
+                      if (learningMidi) {
+                        setLearningMidi(null);
+                      } else {
+                        setLearningMidi({
+                          settingKey: newMappingKey,
+                          min: newMappingMin,
+                          max: newMappingMax,
+                          layerId: activeLayer.id
+                        });
+                      }
+                    }} 
+                    style={{ 
+                      marginTop: '0.4rem',
+                      background: learningMidi ? '#ffcc00' : '#444', 
+                      color: learningMidi ? '#000' : '#fff',
+                      border: 'none',
+                      fontWeight: learningMidi ? 'bold' : 'normal',
+                      padding: '8px'
+                    }}
+                  >
+                    {learningMidi ? "Twist Knob / Move Fader Now... (Click to cancel)" : "+ Assign MIDI CC to Setting"}
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          )}
+        </aside>
+      )}
+
+      <main 
+        className="stage" 
+        style={isFullscreen ? { margin: 0, padding: 0, borderRadius: 0, width: '100vw', height: '100vh', position: 'relative', cursor: 'none' } : {}}
+        onDoubleClick={toggleFullscreen}
+      >
+        <canvas ref={canvasRef} />
+      </main>
+    </div>
+  );
+}
