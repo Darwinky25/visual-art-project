@@ -1,4 +1,48 @@
-node_modules
-/dist
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+dist/
+dist-ssr/
+*.local
+build.log
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Generated files
+vite.config.d.ts
+vite.config.js
+
+# Backups (already in backups/ folder)
+*.backup
+*.backup.*
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS
 .DS_Store
-.vscode
+Thumbs.db
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.swp
+*.swo
+*~
+
+# Tauri
+src-tauri/target/
+src-tauri/WixTools/
+
+# Environment
+.env
+.env.local
+.env.*.local
