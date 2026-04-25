@@ -1,5 +1,6 @@
 mod kinect_server;
 
+use tauri::Manager;
 use kinect_server::{KinectServerState, start_kinect_server, stop_kinect_server, kinect_server_status, restart_kinect_server};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
