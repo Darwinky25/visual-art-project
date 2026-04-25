@@ -12,20 +12,38 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Visual Console",
-        "width": 800,
-        "height": 600,
+        "width": 1280,
+        "height": 800,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "center": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; media-src 'self' blob: data: mediastream:; connect-src 'self' ws: wss: http://localhost:* ws://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:;"
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
+    "resources": [
+      "../../scripts/servers/kinect_server.py",
+      "../../scripts/servers/kinect_server.js"
+    ],
+    "macOS": {
+      "entitlements": null,
+      "exceptionDomain": null,
+      "frameworks": [],
+      "providerShortName": null,
+      "signingIdentity": null
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
