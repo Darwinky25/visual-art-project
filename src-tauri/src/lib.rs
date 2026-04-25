@@ -23,7 +23,7 @@ pub fn run() {
       // Auto-start Kinect server on app launch
       let app_handle = app.handle().clone();
       tauri::async_runtime::spawn(async move {
-        if let Ok(state) = app_handle.try_state::<KinectServerState>() {
+        if let Some(state) = app_handle.try_state::<KinectServerState>() {
           match start_kinect_server(state).await {
             Ok(msg) => log::info!("Kinect auto-start: {}", msg),
             Err(e) => log::warn!("Kinect auto-start failed (this is OK if Kinect is not connected): {}", e),
