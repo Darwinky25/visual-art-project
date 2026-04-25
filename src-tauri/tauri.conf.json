@@ -29,8 +29,8 @@
     "active": true,
     "targets": "all",
     "resources": [
-      "../../scripts/servers/kinect_server.py",
-      "../../scripts/servers/kinect_server.js"
+      "../scripts/servers/kinect_server.py",
+      "../scripts/servers/kinect_server.js"
     ],
     "macOS": {
       "entitlements": null,
