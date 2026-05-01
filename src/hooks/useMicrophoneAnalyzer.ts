@@ -165,6 +165,12 @@ export function useMicrophoneAnalyzer(
       const source = audioContext.createMediaStreamSource(stream);
       source.connect(analyser);
 
+      // Set sample rate in processor for accurate frequency calculations
+      if (processorRef.current && typeof processorRef.current.setSampleRate === 'function') {
+        processorRef.current.setSampleRate(audioContext.sampleRate);
+      }
+
+      // Pre-allocate buffers for performance (avoid GC pressure)
       let frequency = new Uint8Array(analyser.frequencyBinCount);
       let waveform = new Uint8Array(analyser.frequencyBinCount);
       const now = performance.now();
@@ -184,16 +190,21 @@ export function useMicrophoneAnalyzer(
           return;
         }
 
+        // Reallocate buffers only if FFT size changed
         if (frequency.length !== analyserRef.current.frequencyBinCount) {
           frequency = new Uint8Array(analyserRef.current.frequencyBinCount);
           waveform = new Uint8Array(analyserRef.current.frequencyBinCount);
+          console.log('[MicAnalyzer] Buffer size changed to', analyserRef.current.frequencyBinCount);
         }
 
+        // Get audio data
         analyserRef.current.getByteFrequencyData(frequency);
         analyserRef.current.getByteTimeDomainData(waveform);
 
+        // Process audio with production-quality algorithms
         const metricsObj = processorRef.current.process(frequency, waveform);
 
+        // Update frame reference (shared with visualizers)
         frameRef.current = {
           ...metricsObj,
           frequency,
@@ -201,6 +212,7 @@ export function useMicrophoneAnalyzer(
           time: performance.now() - startTime, // Milliseconds since loop started
         };
 
+        // Throttle React state updates to reduce overhead
         if (performance.now() - lastMetricsUpdate > metricsIntervalRef.current) {
           lastMetricsUpdate = performance.now();
           setMetrics(metricsObj);

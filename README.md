@@ -1,104 +1,118 @@
-# 🎛️ Realtime DJ Visualizer
+# Realtime DJ Visualizer
 
-A high-performance, web-based audio visualizer built with React, TypeScript, and the Web Audio API. Designed for live stages, DJ sets, or just playing around with your microphone.
+[![React](https://img.shields.io/badge/React-19-blue.svg)](https://reactjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-7-646cff.svg)](https://vitejs.dev/)
+[![Tauri](https://img.shields.io/badge/Tauri-2.0-24c8db.svg)](https://tauri.app/)
 
-## ✨ Features
+A high-performance, stage-ready audio visualizer built with React, TypeScript, and the Web Audio API. Designed for live performance with microphone-first input, and expandable to system audio, MIDI controllers, webcams, and Kinect depth streaming.
 
-- **Realtime Audio Analysis:** Capture audio directly from your microphone or system audio.
-- **Production Audio Engine:** Adaptive per-band normalization, improved transient/beat detection, and stabilized BPM hinting for live performance conditions.
-- **Tighter Beat Sync:** Multi-signal onset detection (bass + energy + waveform transient), smarter interval gating, and phase-aligned beat pulse for more locked visual timing.
-- **Stronger Bass Pickup:** Low-frequency weighting and faster bass attack/release response improve kick and sub-bass detection so drops are less likely to be missed.
-- **Beat-Driven Motion:** Beat energy now drives mesh displacement and kinetic movement (not just brightness), creating more physical animation response.
-- **Balanced Motion Feel:** Spatial beat movement is tuned with falloff and displacement limits to keep animation lighter and less blocky on dense scenes.
-- **Multiple Visual Styles:** Choose between Radial Ripple, Vertical Wave, Matrix Rain, Random Glitch, and Static Equalizer.
-- **100% Customizable:** Granular control over shapes, sizes, movement thresholds (Bass, Mid, High), speeds, and audio smoothing (latency/jitter).
-- **Custom Theming:** Full hex/RGB color control over the visuals, text, and background.
-- **Stage-Ready Display Mode:** Double-click the canvas to enter a clean, distraction-free Fullscreen mode (hides your cursor and UI).
-- **Control UX Upgrade:** New Basic/Advanced panel mode plus quick search to reduce control overload during live sets.
-- **Favorites Strip:** Pin your most-used parameters into a quick-access favorites area.
-- **Performance Macros:** Four macro sliders (Energy, Motion, Color Heat, Texture) for fast scene shaping on stage.
-- **Preset Browser + A/B Compare:** Save layer presets, assign Slot A/B, and auto-switch between them for quick comparison.
-- **Stage HUD:** Optional on-canvas HUD with FPS, live audio stats, clip risk warning, active layer, and active preset.
-- **Persistent Settings:** Save your favorite settings directly to your browser's local storage so they are ready for your next set.
-- **Highly Optimized:** Decoupled React state from the animation loop, pre-calculated geometry, and minimal DOM reflows to ensure butter-smooth 60fps rendering.
+## Contents
 
-## 🚀 Getting Started
+- [Overview](#overview)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Getting Started](#getting-started)
+- [Audio Permissions and System Audio](#audio-permissions-and-system-audio)
+- [Native Desktop Apps](#native-desktop-apps)
+- [Hardware and Inputs](#hardware-and-inputs)
+- [Project Structure](#project-structure)
+- [Documentation](#documentation)
+- [Build and Release](#build-and-release)
+- [Contributing](#contributing)
+- [License](#license)
 
-### Prerequisites
-- Node.js (v16+ recommended)
+## Overview
 
-### Installation
+Realtime DJ Visualizer is a modular visual engine optimized for low-latency stages and live sets. The renderer runs a high-frequency Canvas loop while the React UI stays lightweight and decoupled, keeping visuals stable under heavy load.
 
-1. Clone this repository
-   ```bash
-   git clone <your-repo-url>
-   cd <your-repo-dir>
-   ```
+## Features
 
-2. Install dependencies
-   ```bash
-   npm install
-   ```
+- Realtime audio analysis with adaptive normalization, beat detection, and stabilized BPM hinting.
+- Beat-driven motion that maps energy to displacement, not just brightness.
+- Multiple visual modes including mandala, geometry, tiles, fractals, ASCII webcam, and Kinect 3D.
+- MIDI control mapping, macro controls, favorites, and preset A/B compare for fast on-stage iteration.
+- Stage HUD, fullscreen clean mode, and projector-safe adjustments for live projection.
+- Persistent settings stored in local storage.
 
-3. Start the development server
-   ```bash
-   npm run dev
-   ```
+## Architecture
 
-4. Open [http://localhost:5173/](http://localhost:5173/) in your browser.
+- Audio analysis runs in a dedicated pipeline that produces beat, energy, and band metrics.
+- Visuals render on a continuous Canvas loop with minimal React involvement.
+- Input adapters abstract microphone, system audio, MIDI, webcam, and Kinect streams.
 
-## 🧩 Native App (Tauri)
+## Getting Started
 
-### Prerequisites
-- Rust toolchain (install via https://rustup.rs)
-- Tauri system dependencies for your OS
+### Requirements
 
-### Run in Tauri (dev)
-1. Start the Vite dev server:
-   ```bash
-   npm run dev
-   ```
-2. In a second terminal, launch the native shell:
-   ```bash
-   npm run tauri:dev
-   ```
+- Node.js v16+ (v18+ recommended)
+- Optional: Rust toolchain for Tauri builds
 
-### Build native bundle
+### Install and Run
+
 ```bash
+npm install
+npm run dev
+```
+
+Open http://localhost:5173/ in your browser.
+
+## Audio Permissions and System Audio
+
+- Microphone and system audio capture require a secure context (HTTPS or localhost).
+- System audio on macOS may require a virtual cable such as BlackHole. See [docs/SETUP.md](docs/SETUP.md).
+
+## Native Desktop Apps
+
+This project supports both Tauri and Electron wrappers.
+
+Tauri (recommended):
+```bash
+npm run tauri:dev
 npm run tauri:build
 ```
 
-## 🎮 Controls
+Electron:
+```bash
+npm run electron:dev
+npm run electron:build
+```
 
-1. **Start Mic / Capture System Audio:** Choose an audio input (soundcard, USB interface, or default) from the dropdown, then start capture.
-2. **Visual Settings Panel:** Use the left navigation rail to jump between GLOBAL, SCENE, VISUALS, and MIDI, then adjust everything from bass sensitivity to visual glitches on the fly.
-   - Includes a **Character Density** control to increase or reduce how many glyphs are drawn in Audio 2D, Webcam ASCII, and Kinect 3D modes.
-   - Includes **Character Opacity** to fade glyphs without dimming the background.
-   - Includes **Background Opacity** to control how solid the stage backdrop feels.
-   - Includes an **Animation Engine (All Motion Settings)** panel for live control of beat threshold, lift/sway strength, flow weight, terrain lift, clamps, and motion weighting.
-   - Includes **Basic/Advanced mode** and a **search bar** for quicker navigation.
-   - Includes **Favorites Quick Controls** where pinned controls stay at the top.
-   - Includes **Performance Macros** to drive multiple motion/color parameters from a few sliders.
-   - Includes **Preset Browser + A/B compare** for rapid visual decision-making.
-3. **Save Settings:** Lock in your configuration so it automatically loads the next time you open the app.
-4. **Fullscreen / Clean Mode:** Double-click the animation or press the `Fullscreen` button to enter presentation mode. Press `Esc` or Double-click again to exit.
-5. **HUD Toggle:** Use the `HUD` button in VISUALS to show/hide real-time stage diagnostics.
-6. **Beat Debug Panel:** In GLOBAL routing, monitor live onset, threshold, beat interval, and confidence to tune sync stability in real time.
-7. **Projector Mode:** Enable black lift, white cap, and safe frame to compensate for projector washout and overscan.
+## Hardware and Inputs
 
-## 🛠️ Tech Stack
+- MIDI controllers via Web MIDI for live mapping.
+- Webcam input for ASCII and texture-driven visuals.
+- Kinect depth via a local server bridge. See [scripts/servers/README.md](scripts/servers/README.md).
 
-- [Vite](https://vitejs.dev/)
-- [React](https://reactjs.org/)
-- [TypeScript](https://www.typescriptlang.org/)
-- HTML5 Canvas API
-- Web Audio API
+## Project Structure
 
-## 📝 Notes
+- [src/](src/) - UI and render orchestration
+- [src/audioProcessor.ts](src/audioProcessor.ts) - Audio analysis and beat metrics
+- [src/visualizer/](src/visualizer/) - Canvas render modules
+- [src/hooks/](src/hooks/) - Audio, MIDI, webcam, Kinect hooks
+- [src-tauri/](src-tauri/) - Native audio capture and desktop shell
+- [electron/](electron/) - Electron wrapper
 
-- **Browser Permissions:** Capturing microphone or system audio requires a secure context (HTTPS) or `localhost`.
-- **System Audio:** Some operating systems (like macOS) may require additional setup or virtual cables (like BlackHole) to natively route system audio into a browser.
-- **Kinect Depth Stream:** The frontend now auto-detects incoming depth frame size (for 640x480, 320x240, 160x120, and metadata-driven sizes) so changing server downsampling does not break centering or scale.
+## Documentation
 
----
-*Created for live performance and experimental audio-visual generation.*
+- [docs/AUDIO_PROCESSING.md](docs/AUDIO_PROCESSING.md) - DSP and beat logic
+- [docs/INPUTS.md](docs/INPUTS.md) - Input devices and routing
+- [docs/SETUP.md](docs/SETUP.md) - Setup steps and system audio notes
+- [docs/TESTING.md](docs/TESTING.md) - Testing guidance
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) - Common fixes
+
+## Build and Release
+
+- Web build: `npm run build` outputs to [dist/](dist/)
+- Electron build output directory is configured in [package.json](package.json) under build.directories.output
+- Tauri build output: [src-tauri/target/](src-tauri/target/)
+
+## Contributing
+
+1. Create a feature branch
+2. Make changes with small, focused commits
+3. Open a pull request with a clear description and screenshots if visuals change
+
+## License
+
+No license file is present yet. Add a LICENSE file to clarify usage and redistribution terms.

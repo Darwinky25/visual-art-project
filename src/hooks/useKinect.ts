@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 
 type DepthFrameSize = {
   width: number;
@@ -77,24 +76,11 @@ export function useKinect() {
   const start = useCallback(async () => {
     if (isRunning) return;
     
-    // Check if running in Tauri and ensure server is started
-    if ((window as any).__TAURI__) {
-      try {
-        setConnectionStatus('Starting Kinect server...');
-        const status = await invoke('kinect_server_status') as boolean;
-        if (!status) {
-          await invoke('start_kinect_server');
-          // Wait for server to start
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-      } catch (err) {
-        console.error("Failed to start Kinect server:", err);
-        setConnectionStatus('Server start failed (check console)');
-        return;
-      }
-    }
-    
+    // Kinect server is auto-started by Electron main process
+    // Just wait a moment for it to be ready
     setConnectionStatus('Connecting to ws://localhost:8765...');
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
     const ws = new WebSocket('ws://localhost:8765');
     ws.binaryType = "arraybuffer";
 

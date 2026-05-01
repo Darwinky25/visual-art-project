@@ -91,47 +91,64 @@ export function drawKinect3D(
       drawX += (drawX - width / 2) * (normalizedDepth * 0.5);
       drawY += (drawY - height / 2) * (normalizedDepth * 0.5);
 
-      // Integrasikan gelombang (wave/ripple) original 2D-nya
+      // Smooth, trippy wave integration - less chaotic, more hypnotic
       if (settings.movementStyle === 'wave') {
-          drawY += Math.sin(x * settings.rippleDamping + internalTime * settings.rippleSpeed) * (bassBoost * normalizedDepth);
+          // Smoother wave with harmonic layers
+          drawY += Math.sin(x * settings.rippleDamping * 0.6 + internalTime * settings.rippleSpeed * 0.7) * (bassBoost * normalizedDepth * 0.8);
+          drawY += Math.cos(x * settings.rippleDamping * 0.4 - internalTime * settings.rippleSpeed * 0.5) * (bassBoost * normalizedDepth * 0.4);
       } else if (settings.movementStyle === 'ripple') {
           const cx = Math.abs(x - sampleW / 2);
           const cy = Math.abs(y - sampleH / 2);
           const dist = Math.sqrt(cx * cx + cy * cy);
-          drawY += Math.sin(dist * settings.rippleDamping - internalTime * settings.rippleSpeed) * (bassBoost * normalizedDepth);
+          // Slower, smoother ripple with secondary harmonic
+          drawY += Math.sin(dist * settings.rippleDamping * 0.6 - internalTime * settings.rippleSpeed * 0.7) * (bassBoost * normalizedDepth * 0.8);
+          drawX += Math.cos(dist * settings.rippleDamping * 0.4 + internalTime * settings.rippleSpeed * 0.5) * (bassBoost * normalizedDepth * 0.3);
       } else if (settings.movementStyle === 'matrix') {
-          drawY = (drawY + (internalTime * settings.rippleSpeed) + (x * 13)) % height;
+          // Smooth cascading flow instead of abrupt wrapping
+          const flowSpeed = internalTime * settings.rippleSpeed * 0.6;
+          drawY += Math.sin(flowSpeed + x * 0.1) * (bassBoost * normalizedDepth * 0.5);
       } else if (settings.movementStyle === 'glitch') {
-          if (Math.random() * 1000 < settings.scatterMultiplier) {
-            drawX += (Math.random() - 0.5) * bassBoost * 100;
-            drawY += (Math.random() - 0.5) * bassBoost * 100;
-          }
+          // Smooth kaleidoscopic pattern instead of random glitch
+          const cx = Math.abs(x - sampleW / 2);
+          const cy = Math.abs(y - sampleH / 2);
+          const angle = Math.atan2(cy, cx);
+          drawX += Math.sin(angle * 6 + internalTime * settings.rippleSpeed * 0.5) * (bassBoost * normalizedDepth * 0.6);
+          drawY += Math.cos(angle * 4 - internalTime * settings.rippleSpeed * 0.4) * (bassBoost * normalizedDepth * 0.6);
       } else if (settings.movementStyle === 'orbit') {
           const cx = Math.abs(x - sampleW / 2);
           const cy = Math.abs(y - sampleH / 2);
-          const angle = Math.atan2(cy, cx) + internalTime * settings.rippleSpeed;
-          drawX += Math.cos(angle * 4) * bassBoost * normalizedDepth;
-          drawY += Math.sin(angle * 4) * bassBoost * normalizedDepth;
+          // Smoother spiral rotation
+          const angle = Math.atan2(cy, cx) + internalTime * settings.rippleSpeed * 0.5;
+          const dist = Math.sqrt(cx * cx + cy * cy);
+          drawX += Math.cos(angle * 3 + dist * 0.05) * bassBoost * normalizedDepth * 0.7;
+          drawY += Math.sin(angle * 3 - dist * 0.05) * bassBoost * normalizedDepth * 0.7;
       } else if (settings.movementStyle === 'tunnel') {
           const cx = Math.abs(x - sampleW / 2);
           const cy = Math.abs(y - sampleH / 2);
           const dist = Math.log(Math.max(1, Math.sqrt(cx * cx + cy * cy))) * 10;
-          drawY += Math.sin(dist * settings.rippleDamping - internalTime * settings.rippleSpeed * 3) * bassBoost * normalizedDepth;
+          // Smoother tunnel with rotating component
+          drawY += Math.sin(dist * settings.rippleDamping * 0.6 - internalTime * settings.rippleSpeed * 1.5) * bassBoost * normalizedDepth * 0.8;
+          const angle = Math.atan2(cy, cx);
+          drawX += Math.cos(angle * 4 + internalTime * settings.rippleSpeed * 0.4) * bassBoost * normalizedDepth * 0.3;
       } else if (settings.movementStyle === 'pulse') {
           const cx = Math.abs(x - sampleW / 2);
           const cy = Math.abs(y - sampleH / 2);
-          const beat = Math.pow(Math.sin(internalTime * settings.rippleSpeed), 8);
-          drawX += (cx * 0.01) * beat * bassBoost * normalizedDepth;
-          drawY += Math.sin(Math.sqrt(cx * cx + cy * cy) * settings.rippleDamping) * bassBoost * normalizedDepth;
+          // Smooth breathing pulse
+          const beat = Math.sin(internalTime * settings.rippleSpeed * 0.6) * 0.5 + 0.5;
+          const dist = Math.sqrt(cx * cx + cy * cy);
+          drawX += Math.sin(dist * settings.rippleDamping * 0.5) * beat * bassBoost * normalizedDepth * 0.5;
+          drawY += Math.cos(dist * settings.rippleDamping * 0.5) * beat * bassBoost * normalizedDepth * 0.5;
       }
 
         ctx.font = `${Math.max(2, zScale * (width / sampleW) * (baseSize / 10))}px monospace`;
       
-      // Warna Matrix / Thermal
+      // Smoother color cycling for trippy effect
       let colorStr = '#ffffff';
       if (settings.colorMode === 'rainbow') {
-        const hue = (x * 2) + (y * 2) + (internalTime * 300) + (normalizedDepth * 360 * settings.colorWaveDepth);
-        colorStr = `hsl(${Math.floor(hue % 360)}, 100%, 50%)`;
+        // Slower, smoother color transitions with phase shift
+        const hue = (x * 1.5) + (y * 1.5) + (internalTime * 150) + (normalizedDepth * 360 * settings.colorWaveDepth);
+        const phaseShift = Math.sin(internalTime * 0.5 + x * 0.1 + y * 0.1) * 30;
+        colorStr = `hsl(${Math.floor((hue + phaseShift) % 360)}, 100%, 50%)`;
       } else if (settings.colorMode === 'thermal') {
         const hue = 240 - (normalizedDepth * 240);
         colorStr = `hsl(${Math.floor(hue)}, 100%, 50%)`;

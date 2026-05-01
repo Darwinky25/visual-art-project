@@ -173,14 +173,14 @@ async def main():
     print("=" * 60)
     print("Kinect Bridge Server - FULLY CONFIGURABLE (ZERO HARDCODES)")
     print("=" * 60)
-    print(f"Server running on ws://localhost:8080")
+    print(f"Server running on ws://localhost:8765")
     print(f"Current Config:")
     for key, value in asdict(current_config).items():
         print(f"  {key}: {value}")
     print("=" * 60)
     print("Waiting for Web Frontend connections...\n")
     
-    async with websockets.serve(handler, "localhost", 8080):
+    async with websockets.serve(handler, "localhost", 8765):
         await asyncio.Future()  # Run forever
 
 if __name__ == "__main__":

@@ -10,8 +10,8 @@ try {
   process.exit(1);
 }
 
-const wss = new WebSocket.Server({ port: 8080 });
-console.log("Kinect Bridge Server berjalan di ws://localhost:8080");
+const wss = new WebSocket.Server({ port: 8765 });
+console.log("Kinect Bridge Server berjalan di ws://localhost:8765");
 
 let clients = [];
 

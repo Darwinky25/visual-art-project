@@ -27,19 +27,20 @@ pub async fn start_kinect_server(state: State<'_, KinectServerState>) -> Result<
     }
 
     // Try to start Python server first
+    // Note: Commands run from src-tauri directory, so we need to go up one level
     let child = Command::new("python3")
-        .arg("scripts/servers/kinect_server.py")
+        .arg("../scripts/servers/kinect_server.py")
         .spawn()
         .or_else(|_| {
             // Fallback to python (without 3)
             Command::new("python")
-                .arg("scripts/servers/kinect_server.py")
+                .arg("../scripts/servers/kinect_server.py")
                 .spawn()
         })
         .or_else(|_| {
             // Fallback to Node.js server
             Command::new("node")
-                .arg("scripts/servers/kinect_server.js")
+                .arg("../scripts/servers/kinect_server.js")
                 .spawn()
         })
         .map_err(|e| {

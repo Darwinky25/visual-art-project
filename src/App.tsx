@@ -14,6 +14,223 @@ import { drawGeometry } from './visualizer/drawGeometry';
 import { drawMedia } from './visualizer/drawMedia';
 import { AudioMonitor } from './components/AudioMonitor';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MANDALA SLIDER DESCRIPTOR
+// A declarative way to describe each parameter we expose (label, range, step,
+// tooltip, default). Kept outside of the component so each slider can look up
+// its default for the ↺ reset button.
+// ─────────────────────────────────────────────────────────────────────────────
+type MandalaSliderSpec = {
+  key: keyof VisualSettings;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  tooltip: string;
+  /** Optional formatter for the inline value; defaults to toFixed(stepDecimals). */
+  format?: (v: number) => string;
+  /** Mark integer-only (uses parseInt and 0 decimals). */
+  integer?: boolean;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MANDALA PRESETS
+// One-click mood configs. Each preset is a partial settings object — it is
+// merged on top of the current settings so untouched params keep their value.
+// ─────────────────────────────────────────────────────────────────────────────
+type MandalaPreset = {
+  id: string;
+  name: string;
+  emoji: string;
+  description: string;
+  settings: Partial<VisualSettings>;
+};
+
+const mandalaPresets: MandalaPreset[] = [
+  {
+    id: 'gentle',
+    name: 'Gentle Mandala',
+    emoji: '🌸',
+    description: 'Slow, breathing 6-fold flower with low scatter.',
+    settings: {
+      movementStyle: 'static',
+      symmetryFolds: 6,
+      globalSpeed: 0.6,
+      rippleSpeed: 3.0,
+      rippleDamping: 0.5,
+      breathAmplitude: 0.55,
+      scatterMultiplier: 12,
+      bassPulseImpact: 0.015,
+      animationBeatLiftStrength: 10,
+      animationBeatResponse: 0.6,
+      animationBeatWaveBaseSpeed: 8,
+      audioTimeWarpMultiplier: 0.25,
+      flowPowerScale: 3,
+      noiseScaleBase: 0.004,
+      noiseTimeMult: 0.2,
+    },
+  },
+  {
+    id: 'classic',
+    name: 'Classic Kaleidoscope',
+    emoji: '🔮',
+    description: '8-fold glitch mandala — the default hero look.',
+    settings: {
+      movementStyle: 'glitch',
+      symmetryFolds: 8,
+      globalSpeed: 1.5,
+      rippleSpeed: 8,
+      rippleDamping: 0.8,
+      breathAmplitude: 0.35,
+      scatterMultiplier: 30,
+      bassPulseImpact: 0.025,
+      animationBeatLiftStrength: 25,
+      animationBeatResponse: 1.2,
+      animationBeatWaveBaseSpeed: 15,
+      audioTimeWarpMultiplier: 0.5,
+      flowPowerScale: 5,
+      noiseScaleBase: 0.005,
+      noiseTimeMult: 0.35,
+    },
+  },
+  {
+    id: 'intense',
+    name: 'Intense Psychedelic',
+    emoji: '⚡',
+    description: '12-fold, fast, punches hard on beats.',
+    settings: {
+      movementStyle: 'glitch',
+      symmetryFolds: 12,
+      globalSpeed: 3.2,
+      rippleSpeed: 15,
+      rippleDamping: 1.2,
+      breathAmplitude: 0.55,
+      scatterMultiplier: 120,
+      bassPulseImpact: 0.07,
+      animationBeatLiftStrength: 40,
+      animationBeatResponse: 2.4,
+      animationBeatWaveBaseSpeed: 24,
+      audioTimeWarpMultiplier: 1.2,
+      flowPowerScale: 15,
+      noiseScaleBase: 0.012,
+      noiseTimeMult: 0.6,
+    },
+  },
+  {
+    id: 'tunnel',
+    name: 'Hypnotic Tunnel',
+    emoji: '🌀',
+    description: 'Zooming tunnel, slow rotation, deep flow.',
+    settings: {
+      movementStyle: 'tunnel',
+      symmetryFolds: 8,
+      globalSpeed: 1.1,
+      rippleSpeed: 11,
+      rippleDamping: 1.4,
+      breathAmplitude: 0.25,
+      scatterMultiplier: 20,
+      bassPulseImpact: 0.03,
+      animationBeatLiftStrength: 18,
+      animationBeatResponse: 1.0,
+      animationBeatWaveBaseSpeed: 20,
+      audioTimeWarpMultiplier: 0.7,
+      flowPowerScale: 20,
+      noiseScaleBase: 0.008,
+      noiseTimeMult: 0.5,
+    },
+  },
+  {
+    id: 'pulse',
+    name: 'Pulsing Rings',
+    emoji: '💫',
+    description: 'Concentric heartbeat rings with strong bass thump.',
+    settings: {
+      movementStyle: 'pulse',
+      symmetryFolds: 8,
+      globalSpeed: 1.2,
+      rippleSpeed: 10,
+      rippleDamping: 0.9,
+      breathAmplitude: 0.45,
+      scatterMultiplier: 25,
+      bassPulseImpact: 0.08,
+      animationBeatLiftStrength: 35,
+      animationBeatResponse: 1.8,
+      animationBeatWaveBaseSpeed: 18,
+      audioTimeWarpMultiplier: 0.4,
+      flowPowerScale: 6,
+      noiseScaleBase: 0.005,
+      noiseTimeMult: 0.3,
+    },
+  },
+  {
+    id: 'liquid',
+    name: 'Liquid Flow',
+    emoji: '🎨',
+    description: 'Fluid ripple, high flow noise, painterly feel.',
+    settings: {
+      movementStyle: 'ripple',
+      symmetryFolds: 8,
+      globalSpeed: 1.4,
+      rippleSpeed: 9,
+      rippleDamping: 0.7,
+      breathAmplitude: 0.4,
+      scatterMultiplier: 40,
+      bassPulseImpact: 0.03,
+      animationBeatLiftStrength: 20,
+      animationBeatResponse: 1.1,
+      animationBeatWaveBaseSpeed: 14,
+      audioTimeWarpMultiplier: 0.6,
+      flowPowerScale: 35,
+      noiseScaleBase: 0.02,
+      noiseTimeMult: 0.7,
+    },
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MANDALA CONTROL GROUPS — each group becomes a collapsible section in the UI.
+// Default tooltips explain what the param does in one sentence.
+// ─────────────────────────────────────────────────────────────────────────────
+const mandalaSymmetryControls: MandalaSliderSpec[] = [
+  { key: 'symmetryFolds', label: 'Symmetry Folds', min: 1, max: 12, step: 1, integer: true,
+    tooltip: 'Number of kaleidoscope mirror axes. 8 is the classic mandala, 12 feels crystalline.' },
+];
+
+const mandalaFlowControls: MandalaSliderSpec[] = [
+  { key: 'globalSpeed', label: 'Global Speed', min: 0, max: 5, step: 0.05,
+    tooltip: 'Master multiplier for all animation time. Higher = faster mandala.' },
+  { key: 'rippleSpeed', label: 'Ripple Speed', min: 0, max: 20, step: 0.1,
+    tooltip: 'How fast concentric rings / petals travel outward.' },
+  { key: 'rippleDamping', label: 'Ripple Damping', min: 0, max: 2, step: 0.02,
+    tooltip: 'Density of the ring pattern — higher values pack more rings on screen.' },
+  { key: 'breathAmplitude', label: 'Breath Amplitude', min: 0, max: 1, step: 0.01,
+    tooltip: 'How deeply the mandala "inhales/exhales" radially over time.' },
+  { key: 'scatterMultiplier', label: 'Scatter Multiplier', min: 0, max: 200, step: 1, integer: true,
+    tooltip: 'Radial push strength driven by the breathing pulse — larger = more dramatic expansion.' },
+];
+
+const mandalaAudioControls: MandalaSliderSpec[] = [
+  { key: 'bassPulseImpact', label: 'Bass Pulse Impact', min: 0, max: 0.1, step: 0.001,
+    tooltip: 'How much the bass inflates the whole grid vertically on every kick.' },
+  { key: 'animationBeatLiftStrength', label: 'Beat Lift Strength', min: 0, max: 50, step: 0.5,
+    tooltip: 'Magnitude of the radial shockwave that rides out from center on each beat.' },
+  { key: 'animationBeatWaveBaseSpeed', label: 'Beat Wave Speed', min: 0, max: 30, step: 0.5,
+    tooltip: 'How fast the on-beat shockwave ring travels outward.' },
+  { key: 'animationBeatResponse', label: 'Beat Response', min: 0, max: 3, step: 0.05,
+    tooltip: 'Overall sensitivity of motion to beat transients.' },
+  { key: 'audioTimeWarpMultiplier', label: 'Audio Time Warp', min: 0, max: 2, step: 0.02,
+    tooltip: 'Let audio energy speed up internal time — feel the music bend time itself.' },
+];
+
+const mandalaNoiseControls: MandalaSliderSpec[] = [
+  { key: 'flowPowerScale', label: 'Flow Power', min: 0, max: 50, step: 0.5,
+    tooltip: 'How hard simplex-noise flow pushes grid cells radially.' },
+  { key: 'noiseScaleBase', label: 'Noise Scale', min: 0, max: 0.05, step: 0.0005,
+    tooltip: 'Size of the flow-noise features. Small = broad swells, large = fine turbulence.' },
+  { key: 'noiseTimeMult', label: 'Noise Time', min: 0, max: 1, step: 0.01,
+    tooltip: 'Speed at which the noise field evolves over time.' },
+];
+
 export type Layer = {
   id: string;
   type: 'audio2d' | 'webcamAscii' | 'kinect3d' | 'media';
@@ -32,37 +249,46 @@ const defaultSettings: VisualSettings = {
   gridWidthRatio: 1.0,
   yOffsetRatio: 0.5,
   dotSizeBase: 6,
-  amplitudeRatio: 0.3,
+  amplitudeRatio: 0.8,
   rowSpacingRatio: 0.035,
   colorMode: 'white',
   customColor: '#ffffff',
   backgroundColor: '#000000',
   backgroundOpacity: 1.0,
-  movementStyle: 'ripple',
+  // Default to 'glitch' — the kaleidoscopic 8-fold mandala.
+  movementStyle: 'glitch',
+  // Number of kaleidoscope mirror axes (1-12). 8 = classic mandala.
+  symmetryFolds: 8,
   bassThreshold: 0.2,
   midThreshold: 0.4,
   highThreshold: 0.6,
   audioSmoothing: 0.15,
+  // Visible motion but not frantic.
   globalSpeed: 1.5,
-  bassPulseImpact: 0.01,
-  baseBrightness: 0.05,
-  glitchIntensity: 20,
-  rippleDamping: 0.4,
-  rippleSpeed: 7.0,
-  colorWaveDepth: 0.4,
-  breathAmplitude: 0.1,
-  scatterMultiplier: 80,
-  audioTimeWarpMultiplier: 0.0,
-  terrainMultiplier: 0.8,
+  bassPulseImpact: 0.025,
+  baseBrightness: 0.08,
+  glitchIntensity: 10,
+  rippleDamping: 0.8,
+  // Keep ripple speed strong so rings/spokes visibly flow outward.
+  rippleSpeed: 8.0,
+  colorWaveDepth: 0.6,
+  // Breathing amplitude kept strong so the mandala visibly inhales/exhales.
+  breathAmplitude: 0.35,
+  // Scatter reduced — it now drives the symmetric radial breath (not asymmetric noise).
+  scatterMultiplier: 30,
+  audioTimeWarpMultiplier: 0.5,
+  terrainMultiplier: 1.5,
+  // Sway & skew were asymmetric — their internal paths are now unused, keep at 0
+  // so nothing accidentally disturbs symmetry if anyone dials them up.
   swayMultiplier: 0.0,
   skewMultiplier: 0.0,
-  trigSinXFreq: 0.2,
-  trigCosXFreq: 0.4,
-  trigCosXTime: 0.8,
-  trigSinDepthXTime: 5.0,
-  trigCosZFreq: 0.3,
-  trigCosZTime: 0.5,
-  trigSinZFreq: 0.2,
+  trigSinXFreq: 0.5,
+  trigCosXFreq: 0.8,
+  trigCosXTime: 1.5,
+  trigSinDepthXTime: 8.0,
+  trigCosZFreq: 0.6,
+  trigCosZTime: 1.2,
+  trigSinZFreq: 0.5,
   dspFftSize: 2048,
   dspMinDecibels: -80,
   dspMaxDecibels: -10,
@@ -73,21 +299,21 @@ const defaultSettings: VisualSettings = {
   customText: 'ltsdeiw sro le temuggmpndgtble tatodt rroycga hedWidntzed Drveresehe oro trzoeman atspea hntt ms aoe lcoesw fs tcst shr e w tis bhesJul tfo di,s pehayafeotep seotn dngexConditananns giotehesioasowthoawitdcynsmgn a a Cuusco d ot pd t,aTt .sasu .ebeate, i via d t Acr nanscur n how tth ontiediaor or essungattg',
   characterDensity: 1.0,
   characterOpacity: 1.0,
-  animationMotionWeight: 1.0,
-  animationFlowWeight: 1.0,
-  animationBeatThreshold: 0.22,
-  animationBeatResponse: 0.8,
-  animationBeatBassInfluence: 0.65,
-  animationBeatWaveBaseSpeed: 11.0,
-  animationBeatSpatialFreq: 0.28,
-  animationCenterBias: 0.65,
-  animationBeatLiftStrength: 18.0,
-  animationBeatSwayStrength: 7.0,
-  animationScatterClampBase: 28.0,
-  animationScatterClampBoost: 10.0,
-  animationTerrainLift: 120.0,
-  animationTerrainBeatStrength: 10.0,
-  animationScaleResponse: 1.0,
+  animationMotionWeight: 1.5,
+  animationFlowWeight: 1.8,
+  animationBeatThreshold: 0.2,
+  animationBeatResponse: 1.2,
+  animationBeatBassInfluence: 1.0,
+  animationBeatWaveBaseSpeed: 15.0,
+  animationBeatSpatialFreq: 0.4,
+  animationCenterBias: 0.5,
+  animationBeatLiftStrength: 25.0,
+  animationBeatSwayStrength: 15.0,
+  animationScatterClampBase: 40.0,
+  animationScatterClampBoost: 15.0,
+  animationTerrainLift: 150.0,
+  animationTerrainBeatStrength: 12.0,
+  animationScaleResponse: 1.5,
   asciiResolution: 50,
   asciiCharSet: 'standard',
   asciiGlitch: 5,
@@ -108,8 +334,8 @@ const defaultSettings: VisualSettings = {
   kinectCropRight: 1.0,
   kinectCropTop: 0.0,
   kinectCropBottom: 1.0,
-  kinectSwayAmplitude: 15.0,
-  kinectSwaySpeed: 2.0,
+  kinectSwayAmplitude: 20.0,
+  kinectSwaySpeed: 1.0,
   kinectLightTrails: true,
   kinectZAxisColor: true,
   kinectShockwave: true,
@@ -119,11 +345,13 @@ const defaultSettings: VisualSettings = {
   kinectSurveillanceOpacity: 0.8,
   kinectSurveillanceSize: 1.2,
   kinectResolution: 1.0,
-  noiseScaleBase: 0.008,
-  noiseTimeMult: 0.3,
-  flowPowerScale: 20.0,
-  scatterIntensityScale: 8.0,
-  glitchChance: 0.2,
+  // Noise now sampled in polar space (dist, foldedAngle) so it stays symmetric.
+  // Lower scales produce broad, slow, kaleidoscopic swells instead of chaos.
+  noiseScaleBase: 0.005,
+  noiseTimeMult: 0.35,
+  flowPowerScale: 5.0,
+  scatterIntensityScale: 12.0,
+  glitchChance: 0.0,
   glitchChars: "XYZ#%@!$<>{}[]",
   zHueBase: 270,
   zHueShift: -90,
@@ -312,7 +540,11 @@ const quickControlDescriptors: QuickControlDescriptor[] = [
 const lerp = (min: number, max: number, amount: number) => min + (max - min) * amount;
 
 export default function App() {
+  // Check if this is projector mode (opened from projector button)
+  const isProjectorMode = new URLSearchParams(window.location.search).get('projector') === 'true';
+  
   const containerRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const layerCanvasesRef = useRef<Map<string, HTMLCanvasElement>>(new Map());
 
@@ -409,9 +641,61 @@ export default function App() {
   const [macroTexture, setMacroTexture] = useState(0.5);
 
   const [showHud, setShowHud] = useState(true);
+  const [showBeatDebug, setShowBeatDebug] = useState(false);
   const [fps, setFps] = useState(0);
   const fpsFrameCounterRef = useRef(0);
   const fpsLastTickRef = useRef(performance.now());
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // TOASTS — replaces inline error strings with a dismissible notification.
+  // ─────────────────────────────────────────────────────────────────────────
+  type ToastKind = 'error' | 'info' | 'success';
+  type Toast = { id: number; kind: ToastKind; message: string };
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastIdRef = useRef(0);
+  const pushToast = useCallback((message: string, kind: ToastKind = 'info') => {
+    const id = ++toastIdRef.current;
+    setToasts(prev => [...prev, { id, kind, message }]);
+    // Auto-dismiss after 8s.
+    window.setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 8000);
+  }, []);
+  const dismissToast = useCallback((id: number) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  // Responsive/narrow-viewport state — on < 900px we hide the sidebar until
+  // the user opens it explicitly via the gear icon.
+  const [isNarrow, setIsNarrow] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 900 : false
+  );
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  useEffect(() => {
+    const handleResize = () => setIsNarrow(window.innerWidth < 900);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Collapsible section open-state. Groups default to open only when the
+  // brief asks (Motion & Flow + Audio Reactivity).
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => ({
+    motion: true,
+    audio: true,
+    appearance: false,
+    noise: false,
+    symmetry: false,
+    advanced: false,
+  }));
+  const toggleGroup = useCallback((id: string) => {
+    setOpenGroups(prev => ({ ...prev, [id]: !prev[id] }));
+  }, []);
+
+  // Hidden file input for JSON import.
+  const importFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Help (keyboard shortcut) popover visibility.
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
 
   const mediaElementsRef = useRef<Map<string, HTMLVideoElement | HTMLImageElement>>(new Map());
 
@@ -655,7 +939,151 @@ export default function App() {
       glitchIntensity: Math.round(lerp(2, 45, value)),
     }));
   }, [setSettings]);
-  
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // MANDALA / MOVEMENT HELPERS
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /** Reset a single parameter to its documented default. */
+  const resetSetting = useCallback((key: keyof VisualSettings) => {
+    setSettings(prev => ({ ...prev, [key]: (defaultSettings as any)[key] }));
+  }, [setSettings]);
+
+  /** Apply a mandala-mood preset to the currently active layer. */
+  const applyMandalaPreset = useCallback((preset: MandalaPreset) => {
+    setSettings(prev => ({ ...prev, ...preset.settings }));
+    pushToast(`${preset.emoji} ${preset.name} loaded`, 'success');
+  }, [setSettings, pushToast]);
+
+  /** Cycle through mandala presets — bound to the P shortcut. */
+  const [mandalaPresetIndex, setMandalaPresetIndex] = useState(0);
+  const cycleMandalaPreset = useCallback(() => {
+    const next = (mandalaPresetIndex + 1) % mandalaPresets.length;
+    setMandalaPresetIndex(next);
+    applyMandalaPreset(mandalaPresets[next]);
+  }, [mandalaPresetIndex, applyMandalaPreset]);
+
+  /** Cycle through movementStyle options — bound to the M shortcut. */
+  const movementStyles = useMemo<VisualSettings['movementStyle'][]>(() =>
+    ['ripple', 'wave', 'matrix', 'glitch', 'orbit', 'tunnel', 'pulse', 'static'], []);
+  const cycleMovementStyle = useCallback(() => {
+    setSettings(prev => {
+      const idx = movementStyles.indexOf(prev.movementStyle);
+      const next = movementStyles[(idx + 1) % movementStyles.length];
+      pushToast(`Movement: ${next}`, 'info');
+      return { ...prev, movementStyle: next };
+    });
+  }, [movementStyles, setSettings, pushToast]);
+
+  /** Replace the active layer's settings with the baked defaults. */
+  const loadAllDefaults = useCallback(() => {
+    if (!activeLayer) return;
+    if (!window.confirm('Reset ALL visual settings on this layer to defaults?')) return;
+    setLayers(prev => prev.map(l => l.id === activeLayer.id
+      ? { ...l, settings: { ...defaultSettings } }
+      : l));
+    pushToast('Defaults restored', 'success');
+  }, [activeLayer, pushToast]);
+
+  /** Download the current layer's settings as a JSON file. */
+  const exportSettingsJson = useCallback(() => {
+    if (!activeLayer) return;
+    try {
+      const payload = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        layerType: activeLayer.type,
+        opacity: activeLayer.opacity,
+        blendMode: activeLayer.blendMode,
+        settings,
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mandala-settings-${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      pushToast('Settings exported', 'success');
+    } catch (err) {
+      pushToast(`Export failed: ${err instanceof Error ? err.message : err}`, 'error');
+    }
+  }, [activeLayer, settings, pushToast]);
+
+  /** Read a JSON file and merge it into the active layer's settings. */
+  const handleImportFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(String(reader.result ?? '{}'));
+        const imported = (data.settings ?? data) as Partial<VisualSettings>;
+        setSettings(prev => ({ ...prev, ...imported }));
+        if (typeof data.opacity === 'number' && activeLayer) {
+          setLayers(prev => prev.map(l => l.id === activeLayer.id ? { ...l, opacity: data.opacity } : l));
+        }
+        if (typeof data.blendMode === 'string' && activeLayer) {
+          setLayers(prev => prev.map(l => l.id === activeLayer.id ? { ...l, blendMode: data.blendMode } : l));
+        }
+        pushToast('Settings imported', 'success');
+      } catch (err) {
+        pushToast(`Import failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
+      }
+    };
+    reader.onerror = () => pushToast('Could not read file', 'error');
+    reader.readAsText(file);
+    // Reset so importing the same file twice still triggers onChange.
+    e.target.value = '';
+  }, [activeLayer, setSettings, pushToast]);
+
+  /** Pick random-but-sensible mandala values. */
+  const randomizeMandala = useCallback(() => {
+    const rand = (min: number, max: number) => min + Math.random() * (max - min);
+    const pickStyle = () =>
+      movementStyles[Math.floor(Math.random() * movementStyles.length)];
+    setSettings(prev => ({
+      ...prev,
+      movementStyle: pickStyle(),
+      symmetryFolds: Math.round(rand(4, 12)),
+      globalSpeed: rand(0.6, 3),
+      rippleSpeed: rand(3, 16),
+      rippleDamping: rand(0.4, 1.4),
+      breathAmplitude: rand(0.15, 0.6),
+      scatterMultiplier: Math.round(rand(15, 120)),
+      bassPulseImpact: rand(0.01, 0.06),
+      animationBeatLiftStrength: rand(10, 40),
+      animationBeatResponse: rand(0.8, 2.2),
+      animationBeatWaveBaseSpeed: rand(8, 24),
+      audioTimeWarpMultiplier: rand(0.2, 1.2),
+      flowPowerScale: rand(2, 25),
+      noiseScaleBase: rand(0.002, 0.02),
+      noiseTimeMult: rand(0.15, 0.7),
+    }));
+    pushToast('🎲 Randomized', 'success');
+  }, [setSettings, movementStyles, pushToast]);
+
+  /** Save settings to localStorage — used by Ctrl/Cmd+S / S shortcut / toolbar. */
+  const saveSettingsToLocal = useCallback(() => {
+    try {
+      localStorage.setItem('visualizer_layers', JSON.stringify(layers));
+      localStorage.setItem('visualizer_sensitivity', sensitivity.toString());
+      pushToast('Settings saved locally', 'success');
+    } catch (err) {
+      pushToast(`Save failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    }
+  }, [layers, sensitivity, pushToast]);
+
+  /** Read the currently-typed value for a given VisualSettings key. */
+  const readSetting = useCallback((key: keyof VisualSettings): number => {
+    const raw = (settings as any)[key];
+    if (typeof raw === 'number') return raw;
+    const def = (defaultSettings as any)[key];
+    return typeof def === 'number' ? def : 0;
+  }, [settings]);
+
   const audioEngineConfig = {
     springTension: settings.springTension ?? 0.3,
     springFriction: settings.springFriction ?? 0.65,
@@ -730,17 +1158,11 @@ export default function App() {
     return localStorage.getItem('visualizer_audio_device') ?? '';
   });
 
+  // Surface microphone errors through the toast system instead of leaving
+  // raw error text in the button row.
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Spacebar for panic button (if not typing in an input)
-      if (e.code === 'Space' && (e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
-        e.preventDefault();
-        setGlobalBlackout(prev => !prev);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+    if (micError) pushToast(micError, 'error');
+  }, [micError, pushToast]);
 
   const refreshAudioInputs = useCallback(async (requestLabels = false) => {
     if (!navigator.mediaDevices?.enumerateDevices) return;
@@ -889,26 +1311,171 @@ export default function App() {
     }
   }, [layers, webcamIsRunning, startWebcam]);
 
-  // Automatically start Kinect whenever app loads since Audio 2D relies on it
+  // Automatically start Kinect whenever app loads
   useEffect(() => {
     startKinect();
   }, [startKinect]);
 
   const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen?.();
+    console.log('toggleFullscreen called');
+    
+    // Simple fallback: just toggle the isFullscreen state to hide sidebar
+    // This works even if browser fullscreen API is blocked
+    if (!isFullscreen) {
+      console.log('Entering pseudo-fullscreen mode (hiding sidebar)');
+      setIsFullscreen(true);
+      
+      // Also try real fullscreen API if available
+      const element = stageRef.current;
+      if (element && element.requestFullscreen) {
+        console.log('Also attempting browser fullscreen...');
+        element.requestFullscreen().catch(err => {
+          console.warn('Browser fullscreen blocked, using sidebar-hide mode instead:', err);
+        });
+      }
     } else {
-      document.exitFullscreen?.();
+      console.log('Exiting fullscreen mode');
+      setIsFullscreen(false);
+      
+      // Exit browser fullscreen if active
+      if (document.fullscreenElement) {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(err => console.warn('Exit fullscreen failed:', err));
+        }
+      }
+    }
+  };
+
+  const openProjectorWindow = () => {
+    // Open a new window with just the canvas for projector output
+    const projectorUrl = window.location.origin + window.location.pathname + '?projector=true';
+    const projectorWindow = window.open(
+      projectorUrl,
+      'ProjectorOutput',
+      'width=1920,height=1080,menubar=no,toolbar=no,location=no,status=no'
+    );
+    
+    if (projectorWindow) {
+      console.log('Projector window opened');
+    } else {
+      alert('Please allow popups for this site to use projector mode');
     }
   };
 
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      console.log('handleFullscreenChange triggered');
+      // PHASE 1 FIX: Check all vendor-prefixed fullscreen elements
+      const isFullscreen = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+      console.log('isFullscreen:', isFullscreen);
+      console.log('document.fullscreenElement:', document.fullscreenElement);
+      setIsFullscreen(isFullscreen);
     };
+    
+    // PHASE 1 FIX: Add all vendor-prefixed event listeners
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
   }, []);
+
+  // ───────────────────────────────────────────────────────────────────────
+  // GLOBAL KEYBOARD SHORTCUTS
+  //   Space — play/pause input (mic/system audio)
+  //   F     — fullscreen toggle
+  //   P     — cycle mandala preset
+  //   M     — cycle movementStyle
+  //   S     — save settings
+  //   R     — randomize mandala
+  //   ?     — toggle shortcuts help popover
+  //   Esc   — exit fullscreen / close help
+  // Shortcuts are ignored while the user is typing inside an input/textarea.
+  // ───────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tgt = e.target as HTMLElement | null;
+      const tag = tgt?.tagName;
+      const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tgt?.isContentEditable;
+
+      if (e.key === 'Escape') {
+        if (showShortcutsHelp) { setShowShortcutsHelp(false); return; }
+        if (isFullscreen) { setIsFullscreen(false); return; }
+        if (mobileSidebarOpen) { setMobileSidebarOpen(false); return; }
+      }
+
+      if (isTyping) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      switch (e.key.toLowerCase()) {
+        case ' ':
+        case 'spacebar': {
+          e.preventDefault();
+          // Play/pause input — start whichever matches the current source, or
+          // stop both if any is running.
+          if (micIsRunning || systemIsRunning) {
+            stopMic();
+            stopSystem();
+            pushToast('Input paused', 'info');
+          } else if (activeSource === 'mic') {
+            startMic(selectedAudioDevice);
+            pushToast('Microphone input started', 'info');
+          } else {
+            startSystem();
+            pushToast('System audio started', 'info');
+          }
+          break;
+        }
+        case 'f':
+          e.preventDefault();
+          toggleFullscreen();
+          break;
+        case 'p':
+          e.preventDefault();
+          cycleMandalaPreset();
+          break;
+        case 'm':
+          e.preventDefault();
+          cycleMovementStyle();
+          break;
+        case 's':
+          e.preventDefault();
+          saveSettingsToLocal();
+          break;
+        case 'r':
+          e.preventDefault();
+          randomizeMandala();
+          break;
+        case '?':
+        case '/':
+          if (e.shiftKey || e.key === '?') {
+            e.preventDefault();
+            setShowShortcutsHelp(prev => !prev);
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    isFullscreen, mobileSidebarOpen, showShortcutsHelp,
+    micIsRunning, systemIsRunning, activeSource, selectedAudioDevice,
+    startMic, stopMic, startSystem, stopSystem,
+    cycleMandalaPreset, cycleMovementStyle, saveSettingsToLocal, randomizeMandala,
+    pushToast,
+  ]);
 
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
@@ -1084,10 +1651,112 @@ export default function App() {
   const liveMetrics = activeSource === 'mic' ? micMetrics : systemMetrics;
   const clipWarning = liveMetrics.peak > 0.95 || liveMetrics.level > 0.95;
 
+  // ───────────────────────────────────────────────────────────────────────
+  // Inline helpers rendering the new mandala controls. Defined inside the
+  // component so they can close over `settings`, `resetSetting`, etc.
+  // ───────────────────────────────────────────────────────────────────────
+  const formatSliderValue = (spec: MandalaSliderSpec, value: number): string => {
+    if (spec.format) return spec.format(value);
+    if (spec.integer) return value.toFixed(0);
+    // Derive a sensible decimal count from the step size.
+    const stepStr = String(spec.step);
+    const dot = stepStr.indexOf('.');
+    const decimals = dot === -1 ? 0 : Math.min(4, stepStr.length - dot - 1);
+    return value.toFixed(decimals);
+  };
+
+  const renderMandalaSlider = (spec: MandalaSliderSpec) => {
+    const value = readSetting(spec.key);
+    const defaultValue = Number((defaultSettings as any)[spec.key] ?? 0);
+    const isAtDefault = Math.abs(value - defaultValue) < (spec.step / 2);
+    return (
+      <div key={`mandala-slider-${spec.key}`} className="mandala-slider-row">
+        <div className="mandala-slider-head">
+          <label className="mandala-slider-label" title={spec.tooltip}>
+            {spec.label}
+            <span className="mandala-slider-info" title={spec.tooltip} aria-label={spec.tooltip}>ⓘ</span>
+          </label>
+          <div className="mandala-slider-value-group">
+            <span className="mandala-slider-value">{formatSliderValue(spec, value)}</span>
+            <button
+              type="button"
+              className="mandala-reset-btn"
+              disabled={isAtDefault}
+              title={`Reset to default (${formatSliderValue(spec, defaultValue)})`}
+              onClick={() => resetSetting(spec.key)}
+            >
+              ↺
+            </button>
+          </div>
+        </div>
+        <input
+          type="range"
+          min={spec.min}
+          max={spec.max}
+          step={spec.step}
+          value={value}
+          onChange={(e) => {
+            const raw = parseFloat(e.target.value);
+            const next = spec.integer ? Math.round(raw) : raw;
+            setSettings(prev => ({ ...prev, [spec.key]: next }));
+          }}
+        />
+        <div className="mandala-slider-minmax">
+          <span>{formatSliderValue(spec, spec.min)}</span>
+          <span>{formatSliderValue(spec, spec.max)}</span>
+        </div>
+      </div>
+    );
+  };
+
+  const renderCollapsibleSection = (
+    id: string,
+    icon: string,
+    title: string,
+    body: React.ReactNode
+  ) => {
+    const open = !!openGroups[id];
+    return (
+      <section key={`mandala-section-${id}`} className={`mandala-section ${open ? 'open' : 'closed'}`}>
+        <button
+          type="button"
+          className="mandala-section-header"
+          aria-expanded={open}
+          onClick={() => toggleGroup(id)}
+        >
+          <span className="mandala-section-title">
+            <span className="mandala-section-icon">{icon}</span>
+            {title}
+          </span>
+          <span className={`mandala-chevron ${open ? 'open' : ''}`} aria-hidden>▾</span>
+        </button>
+        {open && <div className="mandala-section-body">{body}</div>}
+      </section>
+    );
+  };
+
   return (
-    <div className="app-shell" ref={containerRef} style={isFullscreen ? { backgroundColor: '#000', display: 'block', padding: 0, cursor: 'none' } : {}}>
-      {!isFullscreen && (
-        <aside className="sidebar" style={{ width: sidebarWidth, minWidth: sidebarWidth, maxWidth: sidebarWidth }}>
+    <div
+      className={`app-shell ${isNarrow ? 'is-narrow' : ''} ${isNarrow && mobileSidebarOpen ? 'sidebar-open' : ''}`}
+      ref={containerRef}
+      style={(isFullscreen || isProjectorMode) ? { backgroundColor: '#000', display: 'block', padding: 0, cursor: 'none' } : {}}
+    >
+      {!isFullscreen && !isProjectorMode && (!isNarrow || mobileSidebarOpen) && (
+        <aside
+          className={`sidebar ${isNarrow ? 'sidebar--overlay' : ''}`}
+          style={isNarrow
+            ? undefined
+            : { width: sidebarWidth, minWidth: sidebarWidth, maxWidth: sidebarWidth }}
+        >
+          {isNarrow && (
+            <button
+              type="button"
+              className="sidebar-close"
+              onClick={() => setMobileSidebarOpen(false)}
+              aria-label="Close settings"
+              title="Close settings"
+            >✕</button>
+          )}
           <nav className="sidebar-nav">
             <button className={`nav-button ${activeMenu === 'source' ? 'is-active' : ''}`} onClick={() => setActiveMenu('source')}>Global</button>
             <button className={`nav-button ${activeMenu === 'layers' ? 'is-active' : ''}`} onClick={() => setActiveMenu('layers')}>Scene</button>
@@ -1141,18 +1810,33 @@ export default function App() {
                   startMic(selectedAudioDevice);
                 }}
               >Start Input</button>
-              <button className="primary outline" onClick={() => { stopMic(); setActiveSource('system'); startSystem(); }}>Capture System Audio</button>
+              <button className="primary outline" onClick={() => {
+                console.log('Capture System Audio button clicked');
+                stopMic();
+                setActiveSource('system');
+                startSystem();
+              }}>Capture System Audio</button>
               <button onClick={() => { stopMic(); stopSystem(); stopWebcam(); }}>Stop All</button>
-              {micError && <span style={{ color: '#ef4444', padding: '4px 8px', fontSize: '12px' }}>{micError}</span>}
-              
-              <button onClick={() => {
-                localStorage.setItem('visualizer_layers', JSON.stringify(layers));
-                localStorage.setItem('visualizer_sensitivity', sensitivity.toString());
-                alert('Settings saved locally!');
-              }} style={{ background: '#10b981', color: 'white', border: 'none' }}>
+              {/* Errors surface via the toast system at the bottom-right of the stage. */}
+
+              <button onClick={saveSettingsToLocal} className="primary">
                 Save Settings
               </button>
               <button onClick={toggleFullscreen} className="outline">Fullscreen</button>
+              <button
+                onClick={openProjectorWindow}
+                className="outline"
+                style={{ background: '#8b5cf6', color: '#fff', borderColor: '#8b5cf6' }}
+              >
+                🎥 Open Projector Output
+              </button>
+              <button
+                onClick={() => setShowBeatDebug(!showBeatDebug)}
+                className="outline"
+                style={{ background: showBeatDebug ? '#ffcc00' : 'transparent', color: showBeatDebug ? '#000' : '#fff', borderColor: showBeatDebug ? '#ffcc00' : '#555' }}
+              >
+                {showBeatDebug ? 'Hide' : 'Show'} Beat Debug
+              </button>
             </div>
             
             <div style={{ marginTop: '1.5rem', marginBottom: '1rem', borderTop: '1px dashed #333', paddingTop: '1rem' }}>
@@ -1215,29 +1899,31 @@ export default function App() {
                </button>
             </div>
 
-            <div style={{ marginTop: '1.2rem', marginBottom: '1rem', borderTop: '1px dashed #333', paddingTop: '1rem' }}>
-              <strong style={{ opacity: 0.8, textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.65rem', marginBottom: '8px', display: 'block' }}>Beat Debug</strong>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <div style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: '4px', padding: '8px' }}>
-                  <div style={{ color: '#777', fontSize: '0.62rem', textTransform: 'uppercase', marginBottom: '3px' }}>Onset</div>
-                  <div style={{ color: '#fff', fontFamily: 'var(--mono-font)', fontSize: '0.75rem' }}>{liveMetrics.beatOnset.toFixed(3)}</div>
-                </div>
-                <div style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: '4px', padding: '8px' }}>
-                  <div style={{ color: '#777', fontSize: '0.62rem', textTransform: 'uppercase', marginBottom: '3px' }}>Threshold</div>
-                  <div style={{ color: '#fff', fontFamily: 'var(--mono-font)', fontSize: '0.75rem' }}>{liveMetrics.beatThreshold.toFixed(3)}</div>
-                </div>
-                <div style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: '4px', padding: '8px' }}>
-                  <div style={{ color: '#777', fontSize: '0.62rem', textTransform: 'uppercase', marginBottom: '3px' }}>Interval</div>
-                  <div style={{ color: '#fff', fontFamily: 'var(--mono-font)', fontSize: '0.75rem' }}>{liveMetrics.beatIntervalMs.toFixed(0)} ms</div>
-                </div>
-                <div style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: '4px', padding: '8px' }}>
-                  <div style={{ color: '#777', fontSize: '0.62rem', textTransform: 'uppercase', marginBottom: '3px' }}>Confidence</div>
-                  <div style={{ color: liveMetrics.beatConfidence > 0.66 ? '#10b981' : liveMetrics.beatConfidence > 0.4 ? '#ffcc00' : '#ef4444', fontFamily: 'var(--mono-font)', fontSize: '0.75rem' }}>
-                    {(liveMetrics.beatConfidence * 100).toFixed(0)}%
+            {showBeatDebug && (
+              <div style={{ marginTop: '1.2rem', marginBottom: '1rem', borderTop: '1px dashed #333', paddingTop: '1rem' }}>
+                <strong style={{ opacity: 0.8, textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.65rem', marginBottom: '8px', display: 'block' }}>Beat Debug</strong>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: '4px', padding: '8px' }}>
+                    <div style={{ color: '#777', fontSize: '0.62rem', textTransform: 'uppercase', marginBottom: '3px' }}>Onset</div>
+                    <div style={{ color: '#fff', fontFamily: 'var(--mono-font)', fontSize: '0.75rem' }}>{liveMetrics.beatOnset.toFixed(3)}</div>
+                  </div>
+                  <div style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: '4px', padding: '8px' }}>
+                    <div style={{ color: '#777', fontSize: '0.62rem', textTransform: 'uppercase', marginBottom: '3px' }}>Threshold</div>
+                    <div style={{ color: '#fff', fontFamily: 'var(--mono-font)', fontSize: '0.75rem' }}>{liveMetrics.beatThreshold.toFixed(3)}</div>
+                  </div>
+                  <div style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: '4px', padding: '8px' }}>
+                    <div style={{ color: '#777', fontSize: '0.62rem', textTransform: 'uppercase', marginBottom: '3px' }}>Interval</div>
+                    <div style={{ color: '#fff', fontFamily: 'var(--mono-font)', fontSize: '0.75rem' }}>{liveMetrics.beatIntervalMs.toFixed(0)} ms</div>
+                  </div>
+                  <div style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: '4px', padding: '8px' }}>
+                    <div style={{ color: '#777', fontSize: '0.62rem', textTransform: 'uppercase', marginBottom: '3px' }}>Confidence</div>
+                    <div style={{ color: liveMetrics.beatConfidence > 0.66 ? '#10b981' : liveMetrics.beatConfidence > 0.4 ? '#ffcc00' : '#ef4444', fontFamily: 'var(--mono-font)', fontSize: '0.75rem' }}>
+                      {(liveMetrics.beatConfidence * 100).toFixed(0)}%
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {micIsRunning && <span style={{ padding: '4px 8px', background: '#3b82f6', color: '#fff', borderRadius: '4px', fontSize: '12px', marginRight: 4 }}>Mic live</span>}
             {systemIsRunning && <span style={{ padding: '4px 8px', background: '#10b981', color: '#fff', borderRadius: '4px', fontSize: '12px', marginRight: 4 }}>System audio live</span>}
@@ -1396,6 +2082,126 @@ export default function App() {
           {activeLayer && activeMenu === 'params' && (
             <div className="card">
               <h3 style={{ fontSize: '0.9rem', marginBottom: '0.8rem' }}>Settings for Active Layer: {activeLayer.type}</h3>
+
+              {/* ═══════════════════════════════════════════════════════════════
+                   MANDALA UX: toolbar → presets → collapsible control groups
+                   ─────────────────────────────────────────────────────────────
+                   Every slider shows its numeric value, min/max labels, a
+                   tooltip, and a ↺ reset-to-default button. Groups collapse to
+                   keep the panel digestible.
+                   ═══════════════════════════════════════════════════════════ */}
+              <div className="mandala-ux">
+                {/* ── Global actions toolbar ── */}
+                <div className="mandala-actions" role="toolbar" aria-label="Settings actions">
+                  <button type="button" className="primary" onClick={saveSettingsToLocal} title="Save settings to this browser (S)">💾 Save</button>
+                  <button type="button" onClick={loadAllDefaults} title="Reset every setting to default">⟲ Defaults</button>
+                  <button type="button" onClick={exportSettingsJson} title="Download current settings as JSON">⬇ Export</button>
+                  <button type="button" onClick={() => importFileInputRef.current?.click()} title="Load settings from a JSON file">⬆ Import</button>
+                  <button type="button" onClick={randomizeMandala} title="Randomize mandala movement parameters (R)">🎲 Randomize</button>
+                  <button type="button" onClick={() => setShowShortcutsHelp(prev => !prev)} title="Keyboard shortcuts" className="mandala-help-btn">?</button>
+                  <input
+                    ref={importFileInputRef}
+                    type="file"
+                    accept="application/json,.json"
+                    style={{ display: 'none' }}
+                    onChange={handleImportFileChange}
+                  />
+                </div>
+
+                {/* ── Mandala mood presets ── */}
+                <div className="mandala-presets">
+                  <div className="mandala-presets-title">Mandala Presets</div>
+                  <div className="mandala-presets-grid">
+                    {mandalaPresets.map(preset => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        className="mandala-preset-btn"
+                        title={preset.description}
+                        onClick={() => {
+                          const idx = mandalaPresets.findIndex(p => p.id === preset.id);
+                          if (idx >= 0) setMandalaPresetIndex(idx);
+                          applyMandalaPreset(preset);
+                        }}
+                      >
+                        <span className="mandala-preset-emoji">{preset.emoji}</span>
+                        <span className="mandala-preset-name">{preset.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ── Collapsible mandala control groups ── */}
+                <div className="mandala-groups">
+                  {renderCollapsibleSection('motion', '🌀', 'Motion & Flow', (
+                    <>
+                      <div className="mandala-field">
+                        <label className="mandala-select-label">
+                          Movement Style
+                          <span className="mandala-slider-info" title="Which kaleidoscopic motion recipe drives the mandala.">ⓘ</span>
+                        </label>
+                        <select
+                          value={settings.movementStyle}
+                          onChange={(e) => setSettings({ ...settings, movementStyle: e.target.value as VisualSettings['movementStyle'] })}
+                        >
+                          <option value="ripple">Ripple — concentric rings</option>
+                          <option value="wave">Wave — breathing petals</option>
+                          <option value="matrix">Matrix — rings + spokes</option>
+                          <option value="glitch">Glitch — classic mandala</option>
+                          <option value="orbit">Orbit — rotating spiral</option>
+                          <option value="tunnel">Tunnel — zoom inward</option>
+                          <option value="pulse">Pulse — heartbeat rings</option>
+                          <option value="static">Static — slow breath</option>
+                        </select>
+                      </div>
+                      {mandalaFlowControls.map(renderMandalaSlider)}
+                    </>
+                  ))}
+
+                  {renderCollapsibleSection('audio', '🔊', 'Audio Reactivity', (
+                    <>{mandalaAudioControls.map(renderMandalaSlider)}</>
+                  ))}
+
+                  {renderCollapsibleSection('noise', '🌊', 'Noise & Texture', (
+                    <>{mandalaNoiseControls.map(renderMandalaSlider)}</>
+                  ))}
+
+                  {renderCollapsibleSection('symmetry', '⚡', 'Symmetry & Mandala', (
+                    <>
+                      {mandalaSymmetryControls.map(renderMandalaSlider)}
+                      <p className="mandala-hint">
+                        Fewer folds feel organic; 8 is the classic kaleidoscope; 12 feels crystalline.
+                      </p>
+                    </>
+                  ))}
+
+                  {renderCollapsibleSection('appearance', '🎨', 'Appearance & Color', (
+                    <div className="mandala-appearance-row">
+                      <div>
+                        <label className="mandala-select-label">Primary Color</label>
+                        <input
+                          type="color"
+                          value={settings.colorMode === 'custom' ? settings.customColor : '#ffffff'}
+                          onChange={(e) => setSettings({ ...settings, customColor: e.target.value, colorMode: 'custom' })}
+                        />
+                      </div>
+                      <div>
+                        <label className="mandala-select-label">Color Mode</label>
+                        <select
+                          value={settings.colorMode}
+                          onChange={(e) => setSettings({ ...settings, colorMode: e.target.value as VisualSettings['colorMode'] })}
+                        >
+                          <option value="white">Minimal White</option>
+                          <option value="rainbow">Rainbow</option>
+                          <option value="neon">Neon</option>
+                          <option value="thermal">Thermal Vision</option>
+                          <option value="custom">Custom</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               <div className="ux-toolbar">
                 <div className="ux-toolbar-row">
@@ -2507,10 +3313,11 @@ export default function App() {
         </aside>
       )}
 
-      <main 
-        className="stage" 
-        style={isFullscreen ? { margin: 0, padding: 0, borderRadius: 0, width: '100vw', height: '100vh', position: 'relative', cursor: 'none' } : {}}
-        onDoubleClick={toggleFullscreen}
+      <main
+        ref={stageRef}
+        className="stage"
+        style={(isFullscreen || isProjectorMode) ? { margin: 0, padding: 0, borderRadius: 0, width: '100vw', height: '100vh', position: 'relative', cursor: 'none' } : {}}
+        onDoubleClick={isProjectorMode ? undefined : toggleFullscreen}
       >
         <canvas ref={canvasRef} />
         {showHud && (
@@ -2531,7 +3338,74 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* Hamburger gear toggles the sidebar on narrow viewports. Kept out of
+            fullscreen / projector mode so it never shows during shows. */}
+        {isNarrow && !isFullscreen && !isProjectorMode && (
+          <button
+            type="button"
+            className="mobile-sidebar-toggle"
+            onClick={() => setMobileSidebarOpen(prev => !prev)}
+            aria-label="Toggle settings panel"
+            title="Settings"
+          >
+            ⚙
+          </button>
+        )}
       </main>
+
+      {/* Backdrop dims the stage when the mobile sidebar is open. */}
+      {isNarrow && mobileSidebarOpen && !isFullscreen && !isProjectorMode && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setMobileSidebarOpen(false)}
+          aria-hidden
+        />
+      )}
+
+      {/* ── Toasts — dismissible notifications for errors and actions ── */}
+      {toasts.length > 0 && (
+        <div className="toast-stack" role="status" aria-live="polite">
+          {toasts.map(t => (
+            <div key={t.id} className={`toast toast--${t.kind}`}>
+              <span className="toast-message">{t.message}</span>
+              <button
+                type="button"
+                className="toast-dismiss"
+                onClick={() => dismissToast(t.id)}
+                aria-label="Dismiss"
+              >✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Shortcuts help popover ── */}
+      {showShortcutsHelp && (
+        <div className="shortcuts-help-backdrop" onClick={() => setShowShortcutsHelp(false)}>
+          <div className="shortcuts-help-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="shortcuts-help-header">
+              <strong>Keyboard Shortcuts</strong>
+              <button
+                type="button"
+                className="toast-dismiss"
+                onClick={() => setShowShortcutsHelp(false)}
+                aria-label="Close"
+              >✕</button>
+            </div>
+            <dl className="shortcuts-list">
+              <dt><kbd>Space</kbd></dt><dd>Play / pause input</dd>
+              <dt><kbd>F</kbd></dt><dd>Toggle fullscreen</dd>
+              <dt><kbd>P</kbd></dt><dd>Cycle mandala preset</dd>
+              <dt><kbd>M</kbd></dt><dd>Cycle movement style</dd>
+              <dt><kbd>S</kbd></dt><dd>Save settings</dd>
+              <dt><kbd>R</kbd></dt><dd>Randomize mandala</dd>
+              <dt><kbd>?</kbd></dt><dd>Toggle this help</dd>
+              <dt><kbd>Esc</kbd></dt><dd>Exit fullscreen / close overlays</dd>
+            </dl>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

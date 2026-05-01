@@ -38,6 +38,11 @@ export type VisualSettings = {
   animationScaleResponse: number;
   audioSmoothing: number;
   movementStyle: 'ripple' | 'wave' | 'matrix' | 'static' | 'glitch' | 'orbit' | 'tunnel' | 'pulse';
+  /**
+   * Number of mirror axes used by the kaleidoscopic fold. 1 disables the fold
+   * (raw polar), 8 is the classic mandala. Typical range: 1..12.
+   */
+  symmetryFolds?: number;
   globalSpeed: number;
   bassPulseImpact: number;
   baseBrightness: number;
@@ -209,6 +214,11 @@ let dists = new Float32Array(BAND_COUNT);
 let eqScales = new Float32Array(BAND_COUNT);
 let radialDist = new Float32Array(BAND_COUNT * HISTORY_SIZE);
 let radialRipples = new Float32Array(BAND_COUNT * HISTORY_SIZE);
+// SYMMETRIC POLAR BUFFERS — every effect is driven from these so the image is
+// guaranteed to be 8-fold (kaleidoscopic) symmetric regardless of world (x,y).
+let polarFolded = new Float32Array(BAND_COUNT * HISTORY_SIZE);   // folded angle in [0, segA/2]
+let polarUX = new Float32Array(BAND_COUNT * HISTORY_SIZE);       // unit radial vector X
+let polarUY = new Float32Array(BAND_COUNT * HISTORY_SIZE);       // unit radial vector Y
 
 // EFEK "DELAYED MOTION" ARRAY GLOBAL
 // Menyimpan status 'closeness' masing-masing partikel antar-frame 
@@ -244,6 +254,9 @@ export function drawVisualizer(ctx: CanvasRenderingContext2D, canvas: HTMLCanvas
       eqScales = new Float32Array(BAND_COUNT);
       radialDist = new Float32Array(BAND_COUNT * HISTORY_SIZE);
       radialRipples = new Float32Array(BAND_COUNT * HISTORY_SIZE);
+      polarFolded = new Float32Array(BAND_COUNT * HISTORY_SIZE);
+      polarUX = new Float32Array(BAND_COUNT * HISTORY_SIZE);
+      polarUY = new Float32Array(BAND_COUNT * HISTORY_SIZE);
   }
 
   const playSpeed = djState.deckA.isPlaying ? 1 : 0.4;
@@ -336,53 +349,113 @@ export function drawVisualizer(ctx: CanvasRenderingContext2D, canvas: HTMLCanvas
      precalcDepthZ[z] = z; // Adding z to depth later
   }
   
-  // PRE-CALCULATE RADIAL GRID (To replace Waterfall)
-  // We calculate distance from the true center of the screen
-  const movementStyle = settings.movementStyle || 'ripple';
+  // ============================================================================
+  // SYMMETRIC POLAR GRID — the heart of the kaleidoscope
+  // ----------------------------------------------------------------------------
+  // Every movement style derives its value from (dist, foldedAngle) ONLY, never
+  // from raw (x, z). Because mirrored positions produce identical (dist,
+  // foldedAngle), the result is guaranteed 8-fold mirror symmetric.
+  // ============================================================================
+  const movementStyle = settings.movementStyle || 'glitch';
+  // Number of kaleidoscope mirror axes. Clamped so the visualizer stays
+  // well-defined even if a UI slider sends nonsense values.
+  const SEGMENTS = Math.max(1, Math.min(24, Math.floor(settings.symmetryFolds ?? 8)));
+  const SEG_ANGLE = (Math.PI * 2) / SEGMENTS;
+  const HALF_SEG = SEG_ANGLE / 2;
+  const rippleSpeed = settings.rippleSpeed;
+  const rippleDamping = settings.rippleDamping;
+  // Normalize distance to ~screen-diagonal so tunable params feel the same
+  // across resolutions.
+  const distScale = 1 / Math.max(1, Math.min(colSpacing, rowSpacing));
+  // distScale * colSpacing ~= 1 per grid step. Then multiply by rippleDamping.
+
   for (let z = 0; z < HISTORY_SIZE; z++) {
     for (let x = 0; x < BAND_COUNT; x++) {
       const idx = z * BAND_COUNT + x;
-      // Center coordinates
-      const cx = x - (BAND_COUNT / 2);
-      const cz = z - (HISTORY_SIZE / 2);
-      
-      let dist = 0;
-      let ripple = 0;
+      // Pixel-space vector from center (uses actual spacings so the pattern
+      // stays round on any aspect ratio).
+      const cxPx = (x + 0.5 - BAND_COUNT / 2) * colSpacing;
+      const czPx = (z + 0.5 - HISTORY_SIZE / 2) * rowSpacing;
+      const dist = Math.sqrt(cxPx * cxPx + czPx * czPx);
+      const angle = Math.atan2(czPx, cxPx);
 
-      if (movementStyle === 'wave') {
-          // Linear bottom-to-top wave
-          dist = Math.abs(cz); // distance from center line horizontally
-          ripple = Math.sin((HISTORY_SIZE - z) * settings.rippleDamping - internalTime * settings.rippleSpeed) * 0.5 + 0.5;
-      } else if (movementStyle === 'matrix') {
-          // Top-to-bottom rain
-          dist = z; // mapping frequency mostly back to front
-          ripple = Math.sin(z * settings.rippleDamping + x * 0.2 - internalTime * (settings.rippleSpeed * 1.4)) * 0.5 + 0.5;
-      } else if (movementStyle === 'static') {
-          // No movement, just frequency
-          dist = Math.sqrt(cx * cx + cz * cz);
-          ripple = 0.5; // neutral carrier wave
-      } else if (movementStyle === 'glitch') {
-          dist = (Math.sin(cx * x + cz * z) * 10 + 10);
-          ripple = Math.random() > 0.9 ? 1.0 : 0.2;
-      } else if (movementStyle === 'orbit') {
-          // Circular rotation
-          const angle = Math.atan2(cz, cx) + internalTime * settings.rippleSpeed;
-          dist = Math.sqrt(cx * cx + cz * cz);
-          ripple = Math.cos(angle * 4 + dist * 0.1) * 0.5 + 0.5;
-      } else if (movementStyle === 'tunnel') {
-          // Endless tunnel diving effect
-          dist = Math.log(Math.max(1, Math.sqrt(cx * cx + cz * cz))) * 10;
-          ripple = Math.sin(dist * settings.rippleDamping - internalTime * settings.rippleSpeed * 3) * 0.5 + 0.5;
-      } else if (movementStyle === 'pulse') {
-          // Sharp throbbing pulse
-          dist = Math.sqrt(cx * cx + cz * cz);
-          const beat = Math.pow(Math.sin(internalTime * settings.rippleSpeed), 8);
-          ripple = Math.sin(dist * settings.rippleDamping) * 0.5 + 0.5 + beat * 0.5;
-      } else { // 'ripple'
-          // Normalized distance from center
-          dist = Math.sqrt(cx * cx + cz * cz);
-          // Ripple flows OUTWARD from the center, creating a pulse/shockwave effect
-          ripple = Math.sin(dist * settings.rippleDamping - internalTime * settings.rippleSpeed) * 0.5 + 0.5;
+      // FOLDED ANGLE: classic kaleidoscope fold into a [0, HALF_SEG] slice.
+      const wrapped = ((angle % SEG_ANGLE) + SEG_ANGLE) % SEG_ANGLE;
+      const folded = Math.abs(wrapped - HALF_SEG);
+
+      // Unit radial vector — used later for symmetric radial push.
+      const invD = dist > 0.0001 ? 1 / dist : 0;
+      polarUX[idx] = cxPx * invD;
+      polarUY[idx] = czPx * invD;
+      polarFolded[idx] = folded;
+
+      // Scale dist so `d * rippleDamping` gives a pleasing number of rings.
+      const d = dist * distScale;
+      const fa6 = folded * 6;
+      const fa8 = folded * 8;
+      let ripple = 0.5;
+
+      switch (movementStyle) {
+        case 'wave': {
+          // Radial waves + angular petals — a breathing flower.
+          const r = Math.sin(d * rippleDamping * 0.35 - internalTime * rippleSpeed * 0.4);
+          const petals = Math.cos(fa6 + internalTime * 0.9);
+          ripple = 0.5 + r * 0.35 + petals * 0.25;
+          break;
+        }
+        case 'matrix': {
+          // Cascading concentric rings with 6-fold angular lattice.
+          const rings = Math.sin(d * rippleDamping * 0.55 - internalTime * rippleSpeed * 0.6);
+          const spokes = Math.cos(folded * 6 - internalTime * 0.7);
+          ripple = 0.5 + rings * 0.4 + spokes * 0.2;
+          break;
+        }
+        case 'glitch': {
+          // Pure 8-fold kaleidoscopic mandala (the default / hero look).
+          const ring = Math.sin(d * rippleDamping * 0.45 - internalTime * rippleSpeed * 0.4);
+          const petal = Math.sin(fa8 + internalTime * 0.5);
+          const inter = Math.cos(d * 0.05 + fa8 * 0.5 - internalTime * 0.35);
+          ripple = 0.5 + ring * petal * 0.4 + inter * 0.2;
+          break;
+        }
+        case 'orbit': {
+          // Rotating spiral. Uses `cos` of folded angle so the result is still
+          // mirror-symmetric (cos is even about 0).
+          const spiral = Math.cos(d * 0.08 - fa8 * 2 + internalTime * rippleSpeed * 0.3);
+          const ring = Math.sin(d * rippleDamping * 0.4 - internalTime * rippleSpeed * 0.5);
+          ripple = 0.5 + spiral * 0.3 + ring * 0.25;
+          break;
+        }
+        case 'tunnel': {
+          // Zoom tunnel: rings rush inward, angular spokes rotate.
+          const rings = Math.sin(d * rippleDamping * 0.6 + internalTime * rippleSpeed * 1.1);
+          const spokes = Math.cos(fa8 * 2 + internalTime * 0.6);
+          const deep = Math.sin(d * 0.04 + internalTime * rippleSpeed * 0.5);
+          ripple = 0.5 + rings * 0.35 + spokes * 0.2 + deep * 0.15;
+          break;
+        }
+        case 'pulse': {
+          // Pure expanding / contracting concentric rings + global heartbeat.
+          const rings = Math.sin(d * rippleDamping * 0.5 - internalTime * rippleSpeed * 0.6);
+          const beat = Math.sin(internalTime * 1.2) * 0.5 + 0.5;
+          ripple = 0.5 + rings * 0.4 + (beat - 0.5) * 0.25;
+          break;
+        }
+        case 'static': {
+          // Slow breathing mandala.
+          const breathe = Math.sin(internalTime * 0.5);
+          const mand = Math.sin(d * 0.05 - internalTime * 0.6) * Math.cos(fa6);
+          ripple = 0.5 + mand * 0.35 + breathe * 0.15;
+          break;
+        }
+        case 'ripple':
+        default: {
+          // Classic concentric rings expanding from center.
+          const r1 = Math.sin(d * rippleDamping * 0.5 - internalTime * rippleSpeed * 0.6);
+          const r2 = Math.cos(d * rippleDamping * 0.25 + internalTime * rippleSpeed * 0.3);
+          ripple = 0.5 + r1 * 0.4 + r2 * 0.2;
+          break;
+        }
       }
 
       radialDist[idx] = dist;
@@ -420,7 +493,8 @@ export function drawVisualizer(ctx: CanvasRenderingContext2D, canvas: HTMLCanvas
   const animationBeatSpatialFreq = Math.max(0.01, settings.animationBeatSpatialFreq ?? 0.28);
   const animationCenterBias = Math.max(0, Math.min(1, settings.animationCenterBias ?? 0.65));
   const animationBeatLiftStrength = Math.max(0, settings.animationBeatLiftStrength ?? 18.0);
-  const animationBeatSwayStrength = Math.max(0, settings.animationBeatSwayStrength ?? 7.0);
+  // animationBeatSwayStrength no longer used — the cartesian sway term was
+  // inherently asymmetric; beat motion is now a purely radial shockwave.
   const animationScatterClampBase = Math.max(0, settings.animationScatterClampBase ?? 28.0);
   const animationScatterClampBoost = Math.max(0, settings.animationScatterClampBoost ?? 10.0);
   const animationTerrainLift = Math.max(0, settings.animationTerrainLift ?? 120.0);
@@ -504,7 +578,6 @@ export function drawVisualizer(ctx: CanvasRenderingContext2D, canvas: HTMLCanvas
 
   for (let z = 0; z < HISTORY_SIZE; z++) {
     const pyBase = startY + z * rowSpacing;
-    const cacheDepthZ = precalcDepthZ[z];
 
     for (let x = 0; x < BAND_COUNT; x++) {
       const idx = z * BAND_COUNT + x;
@@ -529,8 +602,14 @@ export function drawVisualizer(ctx: CanvasRenderingContext2D, canvas: HTMLCanvas
       const boostedRaw = val * eqScale * sensitivityPlayScale;
       const boosted = boostedRaw > 1 ? 1 : boostedRaw;
       
-      // Select the character from the block of text
-      let char = sourceStr[charIndex % sourceLen];
+      // SYMMETRIC CHARACTER SELECTION
+      // Index into the character source using (dist, foldedAngle) so mirrored
+      // cells always pick the SAME glyph — visibly reinforcing symmetry.
+      const foldedAngleCell = polarFolded[idx];
+      const charSymKey = Math.floor(
+        distToCenter * 0.15 + foldedAngleCell * 7.3 + internalTime * 0.7
+      );
+      let char = sourceStr[((charSymKey % sourceLen) + sourceLen) % sourceLen];
       charIndex++;
 
       // KUNCI GERAKAN BUKAN HANYA BASS:
@@ -555,93 +634,88 @@ export function drawVisualizer(ctx: CanvasRenderingContext2D, canvas: HTMLCanvas
       const frontDepth = 1 - (z / HISTORY_SIZE);
       const centerFalloff = 1 - Math.min(1, distToCenter / maxDist);
       const motionWeight = (1 - animationCenterBias) + (centerFalloff * animationCenterBias);
-      const beatWave = Math.sin((distToCenter * beatSpatialFreq) - (internalTime * beatWaveSpeed) + (x * 0.04) + (z * 0.08));
-      const beatLift = beatWave * beatMotionDrive * animationBeatLiftStrength * settings.amplitudeRatio * (0.35 + frontDepth * 0.65) * motionWeight;
-      const beatSway = Math.cos((cacheDepthZ * 0.35) + (internalTime * (beatWaveSpeed * 0.8)) + (x * 0.08))
-        * beatMotionDrive
-        * animationBeatSwayStrength
-        * (0.2 + movementPower * 0.3)
-        * motionWeight;
       const audioScale = 1.0 + Math.min(0.35, movementPower * (0.15 * animationScaleResponse) * (0.5 + beatMotionDrive));
 
-      // 1. BEAT TRACKING / ON-SET DETECTION (Glitch triggers & character swapping)
-      if (isBeatHit && movementPower > 0.8 && Math.random() < (settings.glitchChance ?? 0.2)) { 
-         // When a snare or kick hits, instantly swap characters (reduced probability to not be overwhelming)
+      // SYMMETRIC radial unit vector for this cell (points outward from center).
+      const ux = polarUX[idx];
+      const uy = polarUY[idx];
+
+      // 1. SYMMETRIC BEAT SHOCKWAVE
+      // Instead of driving lift by raw (x, z), propagate a ring shockwave along
+      // the radial axis. Every mirrored cell receives the same magnitude, so
+      // symmetry is preserved.
+      const beatShock = Math.sin(distToCenter * beatSpatialFreq - internalTime * beatWaveSpeed)
+          * beatMotionDrive
+          * animationBeatLiftStrength
+          * settings.amplitudeRatio
+          * (0.35 + frontDepth * 0.65)
+          * motionWeight;
+
+      // 2. BEAT CHARACTER CYCLE (symmetric — indexed by dist+foldedAngle only)
+      if (isBeatHit && movementPower > 0.8) {
          const chars = settings.glitchChars || "XYZ#%@!$<>{}[]";
-         char = chars[Math.floor(Math.random() * chars.length)];
+         const symIdx = Math.floor(
+           (distToCenter * 0.1 + foldedAngleCell * 5.1 + internalTime * 2) % chars.length
+         );
+         const safeIdx = ((symIdx % chars.length) + chars.length) % chars.length;
+         char = chars[safeIdx];
       }
 
-      // 2. SIMPLEX NOISE & DISPLACEMENT MAPPING (The organic liquid flow)
-      // Wide, sweeping waves instead of jittery static
-      const noiseScaleBase = settings.noiseScaleBase !== undefined ? settings.noiseScaleBase : 0.008;
-      const noiseScale = noiseScaleBase + (settings.scatterMultiplier * 0.002); 
-      const noiseTimeMult = settings.noiseTimeMult !== undefined ? settings.noiseTimeMult : 0.3;
-      const noiseTime = internalTime * noiseTimeMult; // Slower, majestic morphing
-      
-      const nx = x * noiseScale;
-      const nz = z * noiseScale;
-      
-      // 3. RMS AMPLITUDE MAPPING (Gentle breathing)
-      // Max displacement size (in pixels). Keeps the structure intact.
-      const flowPowerScale = settings.flowPowerScale !== undefined ? settings.flowPowerScale : 20.0;
+      // 3. SYMMETRIC SIMPLEX NOISE (sampled in polar space)
+      // Sampling at (dist, foldedAngle) guarantees symmetry: every mirrored
+      // cell evaluates the same noise value.
+      const noiseScaleBase = settings.noiseScaleBase !== undefined ? settings.noiseScaleBase : 0.005;
+      const noiseScale = noiseScaleBase;
+      const noiseTimeMult = settings.noiseTimeMult !== undefined ? settings.noiseTimeMult : 0.15;
+      const noiseTime = internalTime * noiseTimeMult;
+
+      const polarNR = distToCenter * noiseScale;         // radial noise coordinate
+      const polarNA = foldedAngleCell * 3.0;             // angular noise coordinate
+      const flowPowerScale = settings.flowPowerScale !== undefined ? settings.flowPowerScale : 5.0;
       const flowPower = Math.max(0, frame.energy) * flowPowerScale * settings.amplitudeRatio * animationFlowWeight;
-      
-      // Smooth continuous warping (The fabric effect)
-      const warpX = noiseInstance.noise3D(nx, nz, noiseTime) * flowPower;
-      const warpY = noiseInstance.noise3D(nx + 100, nz + 100, noiseTime) * flowPower;
 
-      // 4. OCEANIC WIND / PARALLAX SWAY (Ayunan Kamera Paralaks)
-      // Murni menghilangkan efek ZOOM / Lensa / Distortion yang pusing di mata jika tidak diinginkan.
-      // Suara Bass dapat mendorong jaring searah (menyamping/paralaks) seperti hembusan angin.
-      const configSway = settings.swayMultiplier !== undefined ? settings.swayMultiplier : 0.0;
-      const swayScale = settings.scatterIntensityScale !== undefined ? settings.scatterIntensityScale : 8.0;
-      // Gunakan kekuatan dorongan energi audio dikali dengan configSway yang dapat di-slide pengguna
-      const swayPower = frame.bass * settings.scatterMultiplier * settings.amplitudeRatio * swayScale * 4.0 * configSway;
-      
-      // Hitung ayunan angin halus yang mengalir konsisten (Figure-8 Lissajous)
-      const windX = Math.sin(internalTime * 0.7) * swayPower;
-      const windY = Math.cos(internalTime * 0.4) * swayPower;
-      
-      // Aplikasikan efek Paralaks (Bagian depan Z besar, horizon Z = 0)
-      const parallaxFactor = (z / HISTORY_SIZE);
-      
-      const scatterXRaw = warpX + (windX * parallaxFactor) + beatSway;
-      const scatterYRaw = warpY + (windY * parallaxFactor) - beatLift;
+      // Scalar noise sample — one number that drives radial displacement.
+      let noiseRad = noiseInstance.noise3D(polarNR, polarNA, noiseTime);
+      noiseRad += noiseInstance.noise3D(polarNR * 2.3, polarNA * 2.3, noiseTime * 1.6) * 0.35;
+      const warpRadial = noiseRad * flowPower;
+
+      // 4. SYMMETRIC BREATHING PULSE driven by the ripple pattern itself.
+      // radialRipples[idx] is already built from (dist, foldedAngle), so this
+      // preserves symmetry.
+      const breathPulse = (radialRipples[idx] * 2.0 - 1.0)
+          * settings.scatterMultiplier * 0.15 * settings.amplitudeRatio;
+
+      // 5. COMBINED RADIAL PUSH — project everything along the outward vector.
+      // Tangential and cartesian components are intentionally zero so that
+      // mirrored cells stay mirrored after displacement.
+      const radialPush = warpRadial + beatShock + breathPulse;
       const maxScatter = animationScatterClampBase + movementPower * animationScatterClampBoost;
-      const scatterX = Math.max(-maxScatter, Math.min(maxScatter, scatterXRaw));
-      const scatterY = Math.max(-maxScatter, Math.min(maxScatter, scatterYRaw));
-      
-    const fxDrift = Math.sin(precalcSinDepthX[x] + cacheDepthZ + precalcCosZ[z]) * 3 * fxDepth;
+      const clampedRadial = Math.max(-maxScatter, Math.min(maxScatter, radialPush));
+      const scatterX = ux * clampedRadial;
+      const scatterY = uy * clampedRadial;
 
-      // 5. AUDIO-DRIVEN GEOMETRY (Fluid Physical Mesh)
-      // Topologi dasar Terrain 3D dapat dikonfigurasi peninggiannya secara independen.
+      // FX drift — already radial-symmetric: depends only on dist and time.
+      const fxDrift = Math.sin(distToCenter * 0.04 + internalTime * 2.0) * 3 * fxDepth;
+
+      // 6. SYMMETRIC TERRAIN LIFT — apply audio lift radially (outward).
       const configTerrain = settings.terrainMultiplier !== undefined ? settings.terrainMultiplier : 0.8;
-      const terrainRipple = radialRipples[idx] * 2.0 - 1.0; // Mengalir terus menerus seperti gelombang air
+      const terrainRipple = radialRipples[idx] * 2.0 - 1.0;
       const audioLift = boosted * animationTerrainLift * settings.amplitudeRatio * sensitivityPlayScale * configTerrain;
-      const beatTerrainPush = beatMotionDrive * (animationTerrainBeatStrength + movementPower * (animationTerrainBeatStrength * 0.8)) * (0.2 + frontDepth * 0.55) * motionWeight;
+      const beatTerrainPush = beatMotionDrive
+          * (animationTerrainBeatStrength + movementPower * (animationTerrainBeatStrength * 0.8))
+          * (0.2 + frontDepth * 0.55)
+          * motionWeight;
       const baseTerrainHeight = audioLift + (terrainRipple * audioLift * 0.4) + (beatTerrainPush * radialRipples[idx]);
 
-      // Gunakan Centroid untuk memiringkan angin pada struktur gelombang, bisa dimatikan dengan configSkew
-      const configSkew = settings.skewMultiplier !== undefined ? settings.skewMultiplier : 0.0;
-      const spectralSkew = (frame.centroid - 0.5) * 80.0 * (z / HISTORY_SIZE) * configSkew;
-      
-            // Apply trig matrix directly to base mesh so slider edits are immediately visible.
-            const trigWarpAmount = 0.45 + (frame.energy * 0.75);
-            const trigXWarp = (
-                (precalcSinX[x] * colSpacing * 0.8) +
-                (precalcCosX[x] * colSpacing * 0.6)
-            ) * trigWarpAmount;
-            const trigZWarp = (
-                (precalcSinZ[z] * rowSpacing * 0.9) +
-                (precalcCosZ[z] * rowSpacing * 0.7)
-            ) * trigWarpAmount;
+      // Base cartesian position on the rigid grid — kept pristine so Kinect
+      // lookup still works. Any asymmetric trig / skew / wind has been removed.
+      const pxBase = startX + x * colSpacing + xBias;
+      const pyBaseGrid = pyBase;
 
-            // SAVE ORIGINAL GRID POSITION (before audio warping) for Kinect lookup
-            const pxBase = startX + x * colSpacing + xBias + trigXWarp;
-            const pyBaseGrid = (pyBase + trigZWarp) - baseTerrainHeight;
-      
-      let px = pxBase + scatterX + fxDrift + spectralSkew;
-      let py = pyBaseGrid + scatterY + fxDrift;
+      // Apply the symmetric radial push to the final position. Terrain height
+      // becomes an additional radial shove (outward when positive).
+      let px = pxBase + scatterX + fxDrift + ux * baseTerrainHeight;
+      let py = pyBaseGrid + scatterY + fxDrift + uy * baseTerrainHeight;
       let scale = audioScale;
       let rawBrightness = 0.08 + (boosted * 1.15 > 0.78 ? 0.78 : boosted * 1.15) + beatMotionDrive * 0.08;
 
@@ -790,7 +864,11 @@ export function drawVisualizer(ctx: CanvasRenderingContext2D, canvas: HTMLCanvas
              let hue;
              let lum = 50;
              if (settings.colorMode === 'rainbow') {
-                 hue = (x / BAND_COUNT * 360) + (internalTime * 40) + (z * 5);
+                 // Symmetric rainbow — hue is a function of (dist, foldedAngle)
+                 // so mirrored cells share the same color and the image stays
+                 // a true kaleidoscope across axes.
+                 hue = (distToCenter * 0.8) + (foldedAngleCell * 180 / Math.PI) * 4 + internalTime * 20;
+                 hue += Math.sin(internalTime * 0.5 + distToCenter * 0.02) * 30;
              } else if (settings.colorMode === 'thermal') {
                  const v = Math.min(1, Math.max(0, boosted * 1.5));
                  if (v < 0.2) {
@@ -807,7 +885,8 @@ export function drawVisualizer(ctx: CanvasRenderingContext2D, canvas: HTMLCanvas
                    lum = 50 + ((v - 0.8) / 0.2) * 50;
                  }
              } else {
-                 hue = djState.mixerA.colorFx * 360 + (z * 2);
+                 // Symmetric hue: driven by distance ring, not raw row index.
+                 hue = djState.mixerA.colorFx * 360 + (distToCenter * 0.6);
              }
                    
              appliedColorStr = settings.colorMode === 'thermal' 

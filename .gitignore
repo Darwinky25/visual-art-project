@@ -42,6 +42,14 @@ Thumbs.db
 src-tauri/target/
 src-tauri/WixTools/
 
+# Electron
+dist-electron/
+out/
+*.dmg
+*.exe
+*.AppImage
+*.deb
+
 # Environment
 .env
 .env.local

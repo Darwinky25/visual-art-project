@@ -28,24 +28,24 @@ export function drawGeometry(
   const centroidInfluence = settings.geometryCentroidInfluence || 0.7;
   const complexity = Math.floor(settings.geometryComplexity || 4);
 
-  // Advanced time-based animation
+  // Advanced time-based animation - slower for more hypnotic effect
   const time = (frame.time || 0) * 0.001; // Convert to seconds
 
-  // Audio-driven + harmonic rotation
-  const audioRotation = (frame.energy * rotationSpeed * audioScaling) % (Math.PI * 2);
-  const harmonicRotation = Math.sin(time * 1.8) * 0.4 + Math.cos(time * 1.3) * 0.25;
+  // Smoother audio-driven + harmonic rotation
+  const audioRotation = (frame.energy * rotationSpeed * audioScaling * 0.7) % (Math.PI * 2);
+  const harmonicRotation = Math.sin(time * 1.2) * 0.5 + Math.cos(time * 0.8) * 0.3;
   const rotation = audioRotation + harmonicRotation;
 
-  // Dynamic line count with wave propagation
+  // Smoother dynamic line count with wave propagation
   const lineCount = Math.floor(
-    density + frame.bass * bassLines * density + Math.sin(time * 2.2) * density * 0.3,
+    density + frame.bass * bassLines * density * 0.7 + Math.sin(time * 1.5) * density * 0.2,
   );
 
-  // Intersection modulation with phase shifts
-  const intersectionAmount = frame.mids * midsIntersect * Math.cos(time * 1.9);
+  // Smoother intersection modulation with phase shifts
+  const intersectionAmount = frame.mids * midsIntersect * Math.cos(time * 1.2) * 0.8;
 
-  // Pattern shift with harmonics
-  const patternShift = frame.highs * highsPattern * Math.PI + Math.sin(time * 2.5) * Math.PI * 0.5;
+  // Smoother pattern shift with harmonics
+  const patternShift = frame.highs * highsPattern * Math.PI * 0.8 + Math.sin(time * 1.8) * Math.PI * 0.4;
 
   ctx.save();
   ctx.translate(centerX, centerY);
@@ -54,28 +54,28 @@ export function drawGeometry(
   for (let i = 0; i < lineCount; i++) {
     const baseAngle = (i / lineCount) * Math.PI * 2 + rotation;
     
-    // Phase-shifted for wave propagation effect
+    // Smoother phase-shifted wave propagation
     const phaseShift = (i / lineCount) * Math.PI * 2;
-    const waveAmplitude = Math.sin(time * 3 + phaseShift) * 0.3 + 0.7; // Wave propagates through lines
+    const waveAmplitude = Math.sin(time * 2 + phaseShift) * 0.25 + 0.75; // Smoother wave propagation
     
-    const hue = (baseAngle * 57.3 + time * 40) % 360; // Dynamic hue cycling
-    const opacity = (0.6 + frame.centroid * centroidInfluence * 0.4) * waveAmplitude;
+    const hue = (baseAngle * 57.3 + time * 25) % 360; // Slower hue cycling for trippy effect
+    const opacity = (0.5 + frame.centroid * centroidInfluence * 0.3) * waveAmplitude;
 
-    ctx.strokeStyle = `hsla(${hue}, 70%, 50%, ${opacity})`;
-    ctx.lineWidth = lineWidth + frame.peak * 2 + Math.sin(time * 4 + i * 0.3) * 0.5;
+    ctx.strokeStyle = `hsla(${hue}, 75%, 55%, ${opacity})`;
+    ctx.lineWidth = lineWidth + frame.peak * 1.5 + Math.sin(time * 2.5 + i * 0.2) * 0.4;
 
-    // Lissajous-modulated line length (creates flowing patterns)
+    // Smoother Lissajous-modulated line length
     const lengthMod =
       0.7 +
-      frame.texture * 0.3 +
-      (i % 2) * 0.15 +
-      Math.sin(time * 2.1 + i * 0.5) * 0.2 +
-      Math.cos(time * 1.7 + i * 0.4) * 0.15;
+      frame.texture * 0.25 +
+      (i % 2) * 0.1 +
+      Math.sin(time * 1.5 + i * 0.4) * 0.18 +
+      Math.cos(time * 1.2 + i * 0.3) * 0.12;
     const length = (maxDim / 2) * lengthMod;
 
-    // Lissajous curve endpoints for organic spoke shapes
-    const offsetX = Math.sin(time * 1.9 + i * 0.6) * (maxDim * 0.1);
-    const offsetY = Math.cos(time * 2.3 + i * 0.7) * (maxDim * 0.1);
+    // Smoother Lissajous curve endpoints for hypnotic spoke shapes
+    const offsetX = Math.sin(time * 1.3 + i * 0.5) * (maxDim * 0.08);
+    const offsetY = Math.cos(time * 1.6 + i * 0.6) * (maxDim * 0.08);
 
     ctx.beginPath();
     ctx.moveTo(offsetX, offsetY);
@@ -90,32 +90,32 @@ export function drawGeometry(
   for (let i = 0; i < complexity; i++) {
     const baseAngle = (i / complexity) * Math.PI + rotation * intersectionAmount;
     
-    // Time-based opacity wave propagation
+    // Smoother time-based opacity wave propagation
     const gridPhase = (i / complexity) * Math.PI * 2;
-    const gridWave = Math.sin(time * 2.8 + gridPhase) * 0.25 + 0.75;
+    const gridWave = Math.sin(time * 2.0 + gridPhase) * 0.2 + 0.8;
     
-    const hue = (baseAngle * 57.3 + 180 + time * 30) % 360;
-    const opacity = (0.4 + frame.pulse * 0.3) * gridWave;
+    const hue = (baseAngle * 57.3 + 180 + time * 20) % 360;
+    const opacity = (0.35 + frame.pulse * 0.25) * gridWave;
 
-    ctx.strokeStyle = `hsla(${hue}, 60%, 45%, ${opacity})`;
-    ctx.lineWidth = lineWidth * 0.8 + Math.sin(time * 3.5 + i) * 0.3;
+    ctx.strokeStyle = `hsla(${hue}, 65%, 50%, ${opacity})`;
+    ctx.lineWidth = lineWidth * 0.8 + Math.sin(time * 2.5 + i) * 0.25;
 
-    // Energy-responsive line length with harmonic oscillation
-    const baseLengthMod = 0.8 + frame.energy * 0.2 + Math.sin(time * 1.6 + i * 0.7) * 0.2;
+    // Smoother energy-responsive line length
+    const baseLengthMod = 0.8 + frame.energy * 0.15 + Math.sin(time * 1.2 + i * 0.5) * 0.15;
     const length = maxDim * 0.6 * baseLengthMod;
 
-    // Horizontal lines with amplitude modulation
+    // Smoother horizontal lines with amplitude modulation
     const hPhase = (i / complexity) * Math.PI;
-    const hAmplitude = Math.sin(time * 2.2 + hPhase) * (maxDim / 6);
+    const hAmplitude = Math.sin(time * 1.5 + hPhase) * (maxDim / 8);
     
     ctx.beginPath();
     ctx.moveTo(-length, i * (maxDim / complexity * 0.5) - maxDim / 2 + hAmplitude);
     ctx.lineTo(length, i * (maxDim / complexity * 0.5) - maxDim / 2 + hAmplitude);
     ctx.stroke();
 
-    // Vertical lines with perpendicular amplitude
+    // Smoother vertical lines with perpendicular amplitude
     const vPhase = (i / complexity) * Math.PI + Math.PI / 2;
-    const vAmplitude = Math.cos(time * 1.9 + vPhase) * (maxDim / 6);
+    const vAmplitude = Math.cos(time * 1.3 + vPhase) * (maxDim / 8);
 
     ctx.beginPath();
     ctx.moveTo(i * (maxDim / complexity * 0.5) - maxDim / 2 + vAmplitude, -length);
@@ -125,22 +125,22 @@ export function drawGeometry(
 
   // ===== CONCENTRIC CIRCLES WITH BREATHING/PULSING EFFECT =====
   for (let ring = 1; ring <= 3; ring++) {
-    // Breathing effect: radius oscillates harmonically
-    const breathingFactor = Math.sin(time * 1.7 + ring * 1.2) * 0.2 + 1.0;
+    // Smoother breathing effect
+    const breathingFactor = Math.sin(time * 1.2 + ring * 0.8) * 0.15 + 1.0;
     const radius =
       (maxDim / 2) *
       ((ring / 3) * 0.7 + 0.3 + frame.bass * 0.2) *
       breathingFactor;
 
-    // Color cycling with pattern shift
-    const hue = (ring * 120 + patternShift * 57.3 + time * 50) % 360;
+    // Smoother color cycling with pattern shift
+    const hue = (ring * 120 + patternShift * 57.3 + time * 30) % 360;
     const opacity =
       (0.3 - ring * 0.08) *
-      (0.5 + frame.centroid * 0.5) *
-      (0.6 + Math.sin(time * 2.4 + ring) * 0.4); // Additional pulsing
+      (0.5 + frame.centroid * 0.4) *
+      (0.65 + Math.sin(time * 1.8 + ring) * 0.35); // Smoother pulsing
 
-    ctx.strokeStyle = `hsla(${hue}, 65%, 55%, ${opacity})`;
-    ctx.lineWidth = lineWidth * 0.6 + Math.sin(time * 3.2 + ring) * 0.3;
+    ctx.strokeStyle = `hsla(${hue}, 70%, 55%, ${opacity})`;
+    ctx.lineWidth = lineWidth * 0.6 + Math.sin(time * 2.2 + ring) * 0.25;
 
     ctx.beginPath();
     ctx.arc(0, 0, radius, 0, Math.PI * 2);
@@ -148,15 +148,15 @@ export function drawGeometry(
 
     // Optional: Add decorative points along circles for musical effect
     if (ring === 2) {
-      // Draw decorative nodes every nth position
-      const nodeCount = Math.floor(8 + Math.sin(time * 1.5) * 3);
+      // Smoother decorative nodes
+      const nodeCount = Math.floor(8 + Math.sin(time * 1.0) * 2);
       for (let n = 0; n < nodeCount; n++) {
         const nodeAngle = (n / nodeCount) * Math.PI * 2 + rotation;
         const nodeX = Math.cos(nodeAngle) * radius;
         const nodeY = Math.sin(nodeAngle) * radius;
         
-        // Node pulsates with audio
-        const nodeSize = 2 + frame.peak * 3 + Math.sin(time * 2.5 + n) * 1.5;
+        // Smoother node pulsation
+        const nodeSize = 2 + frame.peak * 2 + Math.sin(time * 1.8 + n) * 1.2;
         
         ctx.fillStyle = `hsla(${hue}, 70%, 60%, ${opacity})`;
         ctx.beginPath();
